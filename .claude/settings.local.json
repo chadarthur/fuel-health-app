@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --version)",
+      "Bash(npm --version)",
+      "Bash(npx --version)",
+      "Bash(ls /Users/chadcalcagno/Desktop/HealthSuperApp/src/app/\\\\\\(app\\\\\\)/recipes/)",
+      "Bash(ls /Users/chadcalcagno/Desktop/HealthSuperApp/src/app/\\\\\\(app\\\\\\)/recipes/[id]/)",
+      "Bash(ls /Users/chadcalcagno/Desktop/HealthSuperApp/src/app/\\\\\\(app\\\\\\)/track/photo/)",
+      "Bash(ls /Users/chadcalcagno/Desktop/HealthSuperApp/src/app/\\\\\\(app\\\\\\)/track/chat/)",
+      "Bash(ls /Users/chadcalcagno/Desktop/HealthSuperApp/src/app/\\\\\\(app\\\\\\)/track/history/)",
+      "Bash(ls /Users/chadcalcagno/Desktop/HealthSuperApp/src/app/\\\\\\(app\\\\\\)/insights/)",
+      "Bash(ls /Users/chadcalcagno/Desktop/HealthSuperApp/src/app/\\\\\\(app\\\\\\)/settings/)",
+      "Bash(ls /Users/chadcalcagno/Desktop/HealthSuperApp/src/app/\\\\\\(app\\\\\\)/)",
+      "Bash(ls /Users/chadcalcagno/Desktop/HealthSuperApp/src/app/\\\\\\(app\\\\\\)/track/)",
+      "Bash(ls /Users/chadcalcagno/Desktop/HealthSuperApp/src/app/\\\\\\(app\\\\\\)/dashboard/)",
+      "Bash(ls /Users/chadcalcagno/Desktop/HealthSuperApp/src/app/\\\\\\(app\\\\\\)/settings/goals/)",
+      "Bash(__NEW_LINE_7116eaa51bba6708__ echo \"=== insights/page.tsx ===\")",
+      "Bash(__NEW_LINE_601205be6f2fe005__ echo \"=== settings/page.tsx ===\")",
+      "Bash(__NEW_LINE_6bccf0f346812af7__ echo \"=== goals/page.tsx ===\")",
+      "Bash(npx tsc --noEmit --skipLibCheck)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://192.168.86.22:3000/dashboard)"
+    ]
+  }
+}

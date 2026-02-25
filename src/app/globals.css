@@ -1,0 +1,137 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Light mode - Warm white (Tiimo-inspired) */
+    --background: 40 20% 98%;
+    --foreground: 240 10% 10%;
+    --surface: 0 0% 100%;
+    --surface-hover: 40 10% 96%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 10%;
+    --primary: 0 80% 70%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 165 100% 42%;
+    --secondary-foreground: 0 0% 100%;
+    --accent: 240 5% 96%;
+    --accent-foreground: 240 10% 10%;
+    --muted: 240 5% 96%;
+    --muted-foreground: 240 5% 46%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 6% 90%;
+    --input: 240 6% 90%;
+    --ring: 0 80% 70%;
+    --radius: 1rem;
+  }
+
+  .dark {
+    /* Dark mode - Deep charcoal (NRC-inspired) */
+    --background: 240 33% 4%;
+    --foreground: 0 0% 100%;
+    --surface: 240 20% 9%;
+    --surface-hover: 240 18% 12%;
+    --card: 240 20% 9%;
+    --card-foreground: 0 0% 100%;
+    --popover: 240 20% 9%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 0 80% 70%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 165 100% 42%;
+    --secondary-foreground: 0 0% 100%;
+    --accent: 240 16% 14%;
+    --accent-foreground: 0 0% 100%;
+    --muted: 240 16% 14%;
+    --muted-foreground: 240 12% 55%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 14% 14%;
+    --input: 240 14% 14%;
+    --ring: 0 80% 70%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer utilities {
+  /* Glass morphism for nav and cards */
+  .glass {
+    @apply bg-surface/80 backdrop-blur-xl border border-white/5;
+  }
+
+  .glass-nav {
+    @apply bg-surface/70 backdrop-blur-2xl border-t border-white/10;
+  }
+
+  /* Gradient text utility */
+  .gradient-text {
+    @apply bg-clip-text text-transparent;
+  }
+
+  /* Card with subtle glow on hover */
+  .card-glow {
+    @apply transition-all duration-300;
+  }
+  .card-glow:hover {
+    box-shadow: 0 0 30px -5px rgba(255, 107, 107, 0.15);
+  }
+
+  /* Tap scale animation for buttons */
+  .tap-scale {
+    @apply transition-transform duration-150 active:scale-[0.97];
+  }
+
+  /* Hide scrollbar */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Macro color utilities */
+  .bg-calories-soft {
+    background-color: rgba(255, 159, 67, 0.15);
+  }
+  .bg-protein-soft {
+    background-color: rgba(84, 160, 255, 0.15);
+  }
+  .bg-carbs-soft {
+    background-color: rgba(254, 202, 87, 0.15);
+  }
+  .bg-fat-soft {
+    background-color: rgba(162, 155, 254, 0.15);
+  }
+
+  /* Gradient borders */
+  .border-gradient {
+    border: 1px solid transparent;
+    background-clip: padding-box;
+    position: relative;
+  }
+  .border-gradient::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(255, 107, 107, 0.3), rgba(0, 212, 170, 0.3));
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    -webkit-mask-composite: xor;
+    pointer-events: none;
+  }
+}
