@@ -99,21 +99,20 @@ async function getValidAccessToken(userId: string): Promise<string | null> {
 
 // ─── WHOOP API helpers ────────────────────────────────────────────────────────
 
-const WHOOP_API = "https://api.prod.whoop.com/developer/v1";
+const WHOOP_API = "https://api.prod.whoop.com/developer/v2";
 
 interface WhoopRecoveryRecord {
-  cycle_id: number;
+  cycle_id: string; // UUID in v2
   score_state: string;
   score?: {
     recovery_score: number;
     resting_heart_rate: number;
     hrv_rmssd_milli: number;
   };
-  // The recovery record has a sleep attached; we get dates from cycles
 }
 
 interface WhoopCycleRecord {
-  id: number;
+  id: string; // UUID in v2
   start: string;
   score_state: string;
   score?: {
@@ -123,7 +122,7 @@ interface WhoopCycleRecord {
 }
 
 interface WhoopSleepRecord {
-  id: number;
+  id: string; // UUID in v2
   start: string;
   end: string;
   nap: boolean;
