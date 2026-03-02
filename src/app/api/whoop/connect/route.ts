@@ -8,8 +8,8 @@ export async function GET() {
   const auth = await requireUser();
   if (auth.error) return auth.error;
 
-  const clientId = process.env.WHOOP_CLIENT_ID;
-  const redirectUri = process.env.WHOOP_REDIRECT_URI;
+  const clientId = process.env.WHOOP_CLIENT_ID?.trim();
+  const redirectUri = process.env.WHOOP_REDIRECT_URI?.trim();
 
   if (!clientId || !redirectUri) {
     return NextResponse.json(

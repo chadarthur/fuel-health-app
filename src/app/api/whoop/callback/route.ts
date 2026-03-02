@@ -21,9 +21,9 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const clientId = process.env.WHOOP_CLIENT_ID;
-  const clientSecret = process.env.WHOOP_CLIENT_SECRET;
-  const redirectUri = process.env.WHOOP_REDIRECT_URI;
+  const clientId = process.env.WHOOP_CLIENT_ID?.trim();
+  const clientSecret = process.env.WHOOP_CLIENT_SECRET?.trim();
+  const redirectUri = process.env.WHOOP_REDIRECT_URI?.trim();
 
   if (!clientId || !clientSecret || !redirectUri) {
     return NextResponse.redirect(`${appUrl}/settings?whoop=error&reason=missing_config`);
