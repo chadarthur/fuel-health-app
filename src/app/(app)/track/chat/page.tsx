@@ -191,6 +191,7 @@ export default function ChatPage() {
     setSending(true);
 
     try {
+      // Build messages array in the format the API expects
       const history = messages
         .filter((m): m is TextMessage => !isMealLog(m))
         .map((m) => ({ role: m.role, content: m.content }));
@@ -199,75 +200,51 @@ export default function ChatPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: userText,
-          history,
+          messages: [...history, { role: "user", content: userText }],
         }),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        const replyText: string = data.reply ?? data.message ?? "";
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        const errMsg = errData.error || `Chat API failed (${res.status})`;
+        throw new Error(errMsg);
+      }
 
-        // Check for meal_log tag
-        const mealMatch = replyText.match(/<meal_log>([\s\S]*?)<\/meal_log>/);
+      // Read JSON response
+      const data = await res.json();
+      const fullText: string = data.reply || "";
 
-        if (mealMatch) {
-          try {
-            const mealData = JSON.parse(mealMatch[1]) as MealLogMessage["mealData"];
-            const cleanText = replyText.replace(/<meal_log>[\s\S]*?<\/meal_log>/, "").trim();
+      // Check for meal_log tag
+      const mealMatch = fullText.match(/<meal_log>([\s\S]*?)<\/meal_log>/);
 
-            if (cleanText) {
-              setMessages((prev) => [
-                ...prev,
-                {
-                  id: Date.now().toString() + "-text",
-                  role: "assistant",
-                  content: cleanText,
-                  timestamp: new Date(),
-                } as TextMessage,
-              ]);
-            }
+      if (mealMatch) {
+        const mealData = JSON.parse(mealMatch[1]) as MealLogMessage["mealData"];
+        const cleanText = fullText.replace(/<meal_log>[\s\S]*?<\/meal_log>/, "").trim();
 
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: Date.now().toString() + "-meal",
-                role: "assistant",
-                type: "meal_log",
-                mealData,
-                timestamp: new Date(),
-              } as MealLogMessage,
-            ]);
-          } catch {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: Date.now().toString(),
-                role: "assistant",
-                content: replyText,
-                timestamp: new Date(),
-              } as TextMessage,
-            ]);
-          }
-        } else {
+        if (cleanText) {
           setMessages((prev) => [
             ...prev,
-            {
-              id: Date.now().toString(),
-              role: "assistant",
-              content: replyText,
-              timestamp: new Date(),
-            } as TextMessage,
+            { id: Date.now().toString() + "-text", role: "assistant", content: cleanText, timestamp: new Date() } as TextMessage,
           ]);
         }
+
+        setMessages((prev) => [
+          ...prev,
+          { id: Date.now().toString() + "-meal", role: "assistant", type: "meal_log", mealData, timestamp: new Date() } as MealLogMessage,
+        ]);
       } else {
-        // Mock response
-        const mockReply = getMockReply(userText);
-        setMessages((prev) => [...prev, ...mockReply]);
+        setMessages((prev) => [
+          ...prev,
+          { id: Date.now().toString(), role: "assistant", content: fullText || "Sorry, I didn't get a response. Try again.", timestamp: new Date() } as TextMessage,
+        ]);
       }
-    } catch {
-      const mockReply = getMockReply(userText);
-      setMessages((prev) => [...prev, ...mockReply]);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : "Something went wrong. Please try again.";
+      console.error("Chat error:", errMsg);
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now().toString(), role: "assistant", content: `Error: ${errMsg}`, timestamp: new Date() } as TextMessage,
+      ]);
     } finally {
       setSending(false);
     }

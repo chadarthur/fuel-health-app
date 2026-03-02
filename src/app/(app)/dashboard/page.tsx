@@ -1,72 +1,62 @@
 "use client";
 
+import useSWR from "swr";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import Link from "next/link";
 import { Camera, PenLine, MessageCircle, Search } from "lucide-react";
 import { MealType } from "@/lib/constants";
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
+// ─── Fetcher ──────────────────────────────────────────────────────────────────
 
-const mockSummary = {
-  date: new Date().toISOString().split("T")[0],
-  totals: { calories: 1240, protein: 88, carbs: 142, fat: 38 },
-  goals: { calories: 2000, protein: 150, carbs: 220, fat: 65 },
-  meals: [
-    {
-      id: "1",
-      name: "Greek Yogurt Parfait",
-      mealType: "breakfast" as MealType,
-      calories: 380,
-      protein: 28,
-      carbs: 46,
-      fat: 8,
-      source: "manual" as const,
-      loggedAt: new Date().toISOString(),
-    },
-    {
-      id: "2",
-      name: "Grilled Chicken & Quinoa Bowl",
-      mealType: "lunch" as MealType,
-      calories: 620,
-      protein: 48,
-      carbs: 72,
-      fat: 18,
-      source: "photo" as const,
-      loggedAt: new Date().toISOString(),
-    },
-    {
-      id: "3",
-      name: "Protein Shake",
-      mealType: "snack" as MealType,
-      calories: 240,
-      protein: 30,
-      carbs: 24,
-      fat: 4,
-      source: "chat" as const,
-      loggedAt: new Date().toISOString(),
-    },
-  ],
-};
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
-const mockWhoop = {
-  recoveryScore: 78,
-  strain: 14.2,
-  sleepHours: 7.4,
-  hrv: 62,
-};
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-const mockWeeklyCalories = [
-  { day: "Mon", calories: 1850, goal: 2000 },
-  { day: "Tue", calories: 2100, goal: 2000 },
-  { day: "Wed", calories: 1760, goal: 2000 },
-  { day: "Thu", calories: 1980, goal: 2000 },
-  { day: "Fri", calories: 2200, goal: 2000 },
-  { day: "Sat", calories: 1640, goal: 2000 },
-  { day: "Sun", calories: 1240, goal: 2000 },
-];
+interface DaySummary {
+  date: string;
+  totals: { calories: number; protein: number; carbs: number; fat: number };
+  goals: { calories: number; protein: number; carbs: number; fat: number };
+  meals: {
+    id: string;
+    name: string;
+    mealType: MealType;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    source: string;
+    loggedAt: string;
+  }[];
+}
+
+interface WeeklySummary {
+  goals: { calories: number };
+  dailyBreakdown: { date: string; calories: number }[];
+}
+
+interface WhoopMetrics {
+  recoveryScore: number;
+  strainScore: number;
+  sleepHours: number;
+  hrvRmssd: number;
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function getToday() {
+  return new Date().toISOString().split("T")[0];
+}
+
+function getDateRange(days: number) {
+  const end = new Date();
+  const start = new Date();
+  start.setDate(start.getDate() - (days - 1));
+  return {
+    startDate: start.toISOString().split("T")[0],
+    endDate: end.toISOString().split("T")[0],
+  };
+}
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -85,6 +75,8 @@ function getMacroPercentage(consumed: number, goal: number): number {
   if (goal <= 0) return 0;
   return Math.min(Math.round((consumed / goal) * 100), 100);
 }
+
+const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
@@ -152,7 +144,7 @@ function MacroRing({
       <div className="text-center">
         <p className="text-xs font-semibold text-foreground/90">{label}</p>
         <p className="text-xs text-muted-foreground">
-          {consumed}
+          {Math.round(consumed)}
           <span className="opacity-60">/{goal}</span>
           <span className="ml-0.5 opacity-60">{unit}</span>
         </p>
@@ -178,9 +170,47 @@ const sourceBadgeColors: Record<string, string> = {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-  const { totals, goals, meals } = mockSummary;
-  const recoveryColor = getRecoveryColor(mockWhoop.recoveryScore);
-  const maxCaloriesInWeek = Math.max(...mockWeeklyCalories.map((d) => d.calories));
+  const today = getToday();
+  const { startDate, endDate } = getDateRange(7);
+
+  // Real data
+  const { data: summary } = useSWR<DaySummary>(
+    `/api/track/summary?date=${today}`,
+    fetcher,
+    { refreshInterval: 30000 }
+  );
+
+  const { data: weekly } = useSWR<WeeklySummary>(
+    `/api/track/summary?period=week&date=${today}`,
+    fetcher,
+    { refreshInterval: 60000 }
+  );
+
+  const { data: whoopRaw } = useSWR<WhoopMetrics[]>(
+    `/api/whoop?startDate=${startDate}&endDate=${endDate}`,
+    fetcher,
+    { onErrorRetry: () => {} }
+  );
+
+  // Derived values
+  const totals = summary?.totals ?? { calories: 0, protein: 0, carbs: 0, fat: 0 };
+  const goals = summary?.goals ?? { calories: 2000, protein: 150, carbs: 250, fat: 65 };
+  const meals = summary?.meals ?? [];
+
+  const weeklyData =
+    weekly?.dailyBreakdown?.map((d) => ({
+      day: DAY_LABELS[new Date(d.date + "T12:00:00").getDay()],
+      calories: d.calories,
+      goal: weekly.goals?.calories ?? goals.calories,
+    })) ?? [];
+
+  const maxCalories = Math.max(...weeklyData.map((d) => d.calories), goals.calories, 1);
+
+  const whoop = Array.isArray(whoopRaw) && whoopRaw.length > 0
+    ? whoopRaw[whoopRaw.length - 1]
+    : null;
+
+  const recoveryColor = getRecoveryColor(whoop?.recoveryScore ?? 0);
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -200,34 +230,10 @@ export default function DashboardPage() {
               Today&apos;s Macros
             </p>
             <div className="grid grid-cols-4 gap-2">
-              <MacroRing
-                label="Calories"
-                consumed={totals.calories}
-                goal={goals.calories}
-                unit="kcal"
-                color="#FF9F43"
-              />
-              <MacroRing
-                label="Protein"
-                consumed={totals.protein}
-                goal={goals.protein}
-                unit="g"
-                color="#54A0FF"
-              />
-              <MacroRing
-                label="Carbs"
-                consumed={totals.carbs}
-                goal={goals.carbs}
-                unit="g"
-                color="#FECA57"
-              />
-              <MacroRing
-                label="Fat"
-                consumed={totals.fat}
-                goal={goals.fat}
-                unit="g"
-                color="#A29BFE"
-              />
+              <MacroRing label="Calories" consumed={totals.calories} goal={goals.calories} unit="kcal" color="#FF9F43" />
+              <MacroRing label="Protein" consumed={totals.protein} goal={goals.protein} unit="g" color="#54A0FF" />
+              <MacroRing label="Carbs" consumed={totals.carbs} goal={goals.carbs} unit="g" color="#FECA57" />
+              <MacroRing label="Fat" consumed={totals.fat} goal={goals.fat} unit="g" color="#A29BFE" />
             </div>
           </CardContent>
         </Card>
@@ -242,39 +248,27 @@ export default function DashboardPage() {
                 Whoop
               </p>
               <span className="text-xs px-2 py-0.5 rounded-full bg-[#00D4AA]/15 text-[#00D4AA] font-medium">
-                Demo
+                {whoop ? "Live" : "Demo"}
               </span>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              {/* Recovery */}
               <div className="flex flex-col items-center p-3 rounded-xl bg-white/[0.04]">
-                <span
-                  className="text-3xl font-black tabular-nums"
-                  style={{ color: recoveryColor }}
-                >
-                  {mockWhoop.recoveryScore}
+                <span className="text-3xl font-black tabular-nums" style={{ color: recoveryColor }}>
+                  {whoop?.recoveryScore ?? "–"}
                 </span>
-                <span className="text-[10px] text-muted-foreground mt-1 font-medium">
-                  Recovery
-                </span>
+                <span className="text-[10px] text-muted-foreground mt-1 font-medium">Recovery</span>
               </div>
-              {/* Strain */}
               <div className="flex flex-col items-center p-3 rounded-xl bg-white/[0.04]">
                 <span className="text-3xl font-black tabular-nums text-foreground">
-                  {mockWhoop.strain.toFixed(1)}
+                  {whoop ? whoop.strainScore.toFixed(1) : "–"}
                 </span>
-                <span className="text-[10px] text-muted-foreground mt-1 font-medium">
-                  Strain
-                </span>
+                <span className="text-[10px] text-muted-foreground mt-1 font-medium">Strain</span>
               </div>
-              {/* Sleep */}
               <div className="flex flex-col items-center p-3 rounded-xl bg-white/[0.04]">
                 <span className="text-3xl font-black tabular-nums text-foreground">
-                  {mockWhoop.sleepHours.toFixed(1)}
+                  {whoop ? whoop.sleepHours.toFixed(1) : "–"}
                 </span>
-                <span className="text-[10px] text-muted-foreground mt-1 font-medium">
-                  Sleep hrs
-                </span>
+                <span className="text-[10px] text-muted-foreground mt-1 font-medium">Sleep hrs</span>
               </div>
             </div>
           </CardContent>
@@ -292,10 +286,7 @@ export default function DashboardPage() {
           ].map(({ icon: Icon, label, href, color }) => (
             <Link key={href} href={href}>
               <div className="flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-card border border-border dark:border-white/5 hover:border-white/10 transition-colors tap-scale">
-                <div
-                  className="w-9 h-9 rounded-xl flex items-center justify-center"
-                  style={{ backgroundColor: `${color}20` }}
-                >
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${color}20` }}>
                   <Icon size={18} style={{ color }} />
                 </div>
                 <span className="text-[11px] font-medium text-muted-foreground">{label}</span>
@@ -312,47 +303,56 @@ export default function DashboardPage() {
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
               7-Day Calories
             </p>
-            <div className="flex items-end gap-1.5 h-20">
-              {mockWeeklyCalories.map(({ day, calories, goal }) => {
-                const heightPct = (calories / maxCaloriesInWeek) * 100;
-                const overGoal = calories > goal;
-                return (
-                  <div key={day} className="flex-1 flex flex-col items-center gap-1">
-                    <div className="w-full flex items-end h-14 relative">
-                      {/* Goal line marker */}
-                      <div
-                        className="absolute w-full border-t border-dashed border-white/20"
-                        style={{ bottom: `${(goal / maxCaloriesInWeek) * 100}%` }}
-                      />
-                      <div
-                        className={cn(
-                          "w-full rounded-t-md transition-all",
-                          overGoal
-                            ? "bg-[#FF6B6B]/70"
-                            : "bg-gradient-to-t from-[#FF9F43]/80 to-[#FF9F43]/40"
-                        )}
-                        style={{ height: `${heightPct}%` }}
-                      />
-                    </div>
-                    <span className="text-[9px] text-muted-foreground font-medium">{day}</span>
+            {weeklyData.length > 0 ? (
+              <>
+                <div className="flex items-end gap-1.5 h-20">
+                  {weeklyData.map(({ day, calories, goal }, i) => {
+                    const heightPct = (calories / maxCalories) * 100;
+                    const overGoal = calories > goal;
+                    return (
+                      <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                        <div className="w-full flex items-end h-14 relative">
+                          <div
+                            className="absolute w-full border-t border-dashed border-white/20"
+                            style={{ bottom: `${(goal / maxCalories) * 100}%` }}
+                          />
+                          {calories > 0 && (
+                            <div
+                              className={cn(
+                                "w-full rounded-t-md transition-all",
+                                overGoal
+                                  ? "bg-[#FF6B6B]/70"
+                                  : "bg-gradient-to-t from-[#FF9F43]/80 to-[#FF9F43]/40"
+                              )}
+                              style={{ height: `${Math.max(heightPct, 4)}%` }}
+                            />
+                          )}
+                        </div>
+                        <span className="text-[9px] text-muted-foreground font-medium">{day}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center gap-3 mt-3">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full bg-[#FF9F43]/80" />
+                    <span className="text-[10px] text-muted-foreground">Consumed</span>
                   </div>
-                );
-              })}
-            </div>
-            <div className="flex items-center gap-3 mt-3">
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-[#FF9F43]/80" />
-                <span className="text-[10px] text-muted-foreground">Consumed</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-[#FF6B6B]/70" />
-                <span className="text-[10px] text-muted-foreground">Over goal</span>
-              </div>
-              <div className="flex items-center gap-1.5 ml-auto">
-                <div className="w-3 border-t border-dashed border-white/30" />
-                <span className="text-[10px] text-muted-foreground">Goal</span>
-              </div>
-            </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full bg-[#FF6B6B]/70" />
+                    <span className="text-[10px] text-muted-foreground">Over goal</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 ml-auto">
+                    <div className="w-3 border-t border-dashed border-white/30" />
+                    <span className="text-[10px] text-muted-foreground">Goal</span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                Start logging meals to see your weekly trend
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -363,56 +363,54 @@ export default function DashboardPage() {
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
             Recent Meals
           </p>
-          <Link
-            href="/track/history"
-            className="text-xs text-[#FF6B6B] font-medium hover:opacity-80"
-          >
+          <Link href="/track/history" className="text-xs text-[#FF6B6B] font-medium hover:opacity-80">
             See all
           </Link>
         </div>
         <div className="flex flex-col gap-2">
-          {meals.map((meal) => (
-            <Card key={meal.id} glass className="overflow-hidden">
-              <CardContent className="py-3 px-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-sm font-semibold truncate">{meal.name}</span>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span
-                          className={cn(
-                            "text-[10px] font-semibold px-1.5 py-0.5 rounded-full",
-                            mealTypeBadgeColors[meal.mealType]
-                          )}
-                        >
-                          {meal.mealType.charAt(0).toUpperCase() + meal.mealType.slice(1)}
-                        </span>
-                        <span
-                          className={cn(
-                            "text-[10px] font-semibold px-1.5 py-0.5 rounded-full",
-                            sourceBadgeColors[meal.source]
-                          )}
-                        >
-                          {meal.source}
-                        </span>
+          {meals.length === 0 ? (
+            <Card glass>
+              <CardContent className="py-8 text-center">
+                <p className="text-sm text-muted-foreground">No meals logged today</p>
+                <Link href="/track" className="text-xs text-[#FF6B6B] font-medium mt-1 block hover:opacity-80">
+                  Log your first meal →
+                </Link>
+              </CardContent>
+            </Card>
+          ) : (
+            meals.slice(0, 5).map((meal) => (
+              <Card key={meal.id} glass className="overflow-hidden">
+                <CardContent className="py-3 px-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-sm font-semibold truncate">{meal.name}</span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", mealTypeBadgeColors[meal.mealType])}>
+                            {meal.mealType.charAt(0).toUpperCase() + meal.mealType.slice(1)}
+                          </span>
+                          <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", sourceBadgeColors[meal.source])}>
+                            {meal.source}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0 ml-3">
+                      <span className="text-base font-black" style={{ color: "#FF9F43" }}>
+                        {Math.round(meal.calories)}
+                      </span>
+                      <span className="text-xs text-muted-foreground ml-0.5">kcal</span>
+                      <div className="flex gap-2 mt-0.5 text-[10px] text-muted-foreground">
+                        <span>P {Math.round(meal.protein)}g</span>
+                        <span>C {Math.round(meal.carbs)}g</span>
+                        <span>F {Math.round(meal.fat)}g</span>
                       </div>
                     </div>
                   </div>
-                  <div className="text-right shrink-0 ml-3">
-                    <span className="text-base font-black" style={{ color: "#FF9F43" }}>
-                      {meal.calories}
-                    </span>
-                    <span className="text-xs text-muted-foreground ml-0.5">kcal</span>
-                    <div className="flex gap-2 mt-0.5 text-[10px] text-muted-foreground">
-                      <span>P {meal.protein}g</span>
-                      <span>C {meal.carbs}g</span>
-                      <span>F {meal.fat}g</span>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            ))
+          )}
         </div>
       </div>
     </div>

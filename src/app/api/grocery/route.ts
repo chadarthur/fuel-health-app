@@ -1,22 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { categorizeIngredient } from "@/lib/grocery-utils";
-
-const USER_ID = "demo-user";
-
-async function ensureDemoUser() {
-  await prisma.user.upsert({
-    where: { id: USER_ID },
-    update: {},
-    create: { id: USER_ID, name: "Demo User", email: "demo@fuel.app" },
-  });
-}
+import { requireUser } from "@/lib/session";
 
 export async function GET() {
   try {
-    await ensureDemoUser();
+    const auth = await requireUser();
+    if (auth.error) return auth.error;
+    const { userId } = auth;
+
     const items = await prisma.groceryItem.findMany({
-      where: { userId: USER_ID },
+      where: { userId },
       orderBy: [{ category: "asc" }, { createdAt: "asc" }],
     });
     return NextResponse.json(
@@ -37,7 +31,10 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    await ensureDemoUser();
+    const auth = await requireUser();
+    if (auth.error) return auth.error;
+    const { userId } = auth;
+
     const body = await req.json();
     const { name, quantity, unit, category } = body;
 
@@ -45,7 +42,7 @@ export async function POST(req: NextRequest) {
 
     const cat = category || categorizeIngredient(name);
     const item = await prisma.groceryItem.create({
-      data: { userId: USER_ID, name, quantity: quantity ?? null, unit: unit ?? null, category: cat },
+      data: { userId, name, quantity: quantity ?? null, unit: unit ?? null, category: cat },
     });
     return NextResponse.json(item);
   } catch (err) {
@@ -56,12 +53,16 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
+    const auth = await requireUser();
+    if (auth.error) return auth.error;
+    const { userId } = auth;
+
     const body = await req.json();
     const { id, ...updates } = body;
     if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
 
     const item = await prisma.groceryItem.updateMany({
-      where: { id, userId: USER_ID },
+      where: { id, userId },
       data: updates,
     });
     return NextResponse.json(item);
@@ -73,18 +74,21 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    const auth = await requireUser();
+    if (auth.error) return auth.error;
+    const { userId } = auth;
+
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
 
     if (id) {
-      await prisma.groceryItem.deleteMany({ where: { id, userId: USER_ID } });
+      await prisma.groceryItem.deleteMany({ where: { id, userId } });
       return NextResponse.json({ success: true });
     }
 
-    // Check body for clearChecked
     const body = await req.json().catch(() => ({}));
     if (body.clearChecked) {
-      await prisma.groceryItem.deleteMany({ where: { userId: USER_ID, checked: true } });
+      await prisma.groceryItem.deleteMany({ where: { userId, checked: true } });
       return NextResponse.json({ success: true });
     }
 

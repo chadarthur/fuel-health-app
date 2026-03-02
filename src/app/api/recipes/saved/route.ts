@@ -1,21 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-
-const USER_ID = "demo-user";
-
-async function ensureDemoUser() {
-  await prisma.user.upsert({
-    where: { id: USER_ID },
-    update: {},
-    create: { id: USER_ID, name: "Demo User", email: "demo@fuel.app" },
-  });
-}
+import { requireUser } from "@/lib/session";
 
 export async function GET() {
   try {
-    await ensureDemoUser();
+    const auth = await requireUser();
+    if (auth.error) return auth.error;
+    const { userId } = auth;
+
     const recipes = await prisma.savedRecipe.findMany({
-      where: { userId: USER_ID },
+      where: { userId },
       orderBy: { createdAt: "desc" },
     });
 
@@ -37,12 +31,15 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    await ensureDemoUser();
+    const auth = await requireUser();
+    if (auth.error) return auth.error;
+    const { userId } = auth;
+
     const body = await req.json();
 
     const recipe = await prisma.savedRecipe.create({
       data: {
-        userId: USER_ID,
+        userId,
         spoonacularId: body.spoonacularId ?? null,
         title: body.title,
         image: body.image ?? null,
@@ -68,11 +65,15 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    const auth = await requireUser();
+    if (auth.error) return auth.error;
+    const { userId } = auth;
+
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
-    await prisma.savedRecipe.deleteMany({ where: { id, userId: USER_ID } });
+    await prisma.savedRecipe.deleteMany({ where: { id, userId } });
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("Delete recipe error:", err);

@@ -1,55 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import Link from "next/link";
-import { Camera, MessageCircle, PenLine, ChevronRight, Clock } from "lucide-react";
+import { Camera, MessageCircle, PenLine, ChevronRight, Clock, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { MealEntryData, DailySummary } from "@/types/macro";
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
+// ─── Fetcher ──────────────────────────────────────────────────────────────────
 
-const MOCK_SUMMARY: DailySummary = {
-  date: new Date().toISOString().split("T")[0],
-  totals: { calories: 1240, protein: 88, carbs: 142, fat: 38 },
-  goals: { calories: 2000, protein: 150, carbs: 220, fat: 65 },
-  meals: [
-    {
-      id: "1",
-      name: "Greek Yogurt Parfait",
-      mealType: "breakfast",
-      calories: 380,
-      protein: 28,
-      carbs: 46,
-      fat: 8,
-      source: "manual",
-      loggedAt: new Date(Date.now() - 7200000).toISOString(),
-    },
-    {
-      id: "2",
-      name: "Grilled Chicken & Quinoa Bowl",
-      mealType: "lunch",
-      calories: 620,
-      protein: 48,
-      carbs: 72,
-      fat: 18,
-      source: "photo",
-      loggedAt: new Date(Date.now() - 3600000).toISOString(),
-    },
-    {
-      id: "3",
-      name: "Protein Shake",
-      mealType: "snack",
-      calories: 240,
-      protein: 30,
-      carbs: 24,
-      fat: 4,
-      source: "chat",
-      loggedAt: new Date(Date.now() - 1800000).toISOString(),
-    },
-  ],
-};
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const MACRO_CONFIG = [
   { key: "calories" as const, label: "Calories", unit: "kcal", color: "#FF9F43" },
@@ -65,9 +29,13 @@ const sourceBadge: Record<MealEntryData["source"], { label: string; color: strin
   manual: { label: "✋ Manual", color: "rgba(255,255,255,0.4)" },
 };
 
+const EMPTY_TOTALS = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+const DEFAULT_GOALS = { calories: 2000, protein: 150, carbs: 250, fat: 65 };
+
 function formatRelativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
   return `${hrs}h ago`;
@@ -76,62 +44,88 @@ function formatRelativeTime(iso: string): string {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function TrackPage() {
-  const [summary, setSummary] = useState<DailySummary>(MOCK_SUMMARY);
+  const today = new Date().toISOString().split("T")[0];
+
+  const { data: summary, mutate } = useSWR<DailySummary>(
+    `/api/track/summary?date=${today}`,
+    fetcher,
+    { refreshInterval: 0 }
+  );
+
   const [showTextInput, setShowTextInput] = useState(false);
   const [textEntry, setTextEntry] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
+  const [error, setError] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchSummary = async () => {
-      try {
-        const res = await fetch(`/api/track/summary?date=${new Date().toISOString().split("T")[0]}`);
-        if (res.ok) {
-          const data = await res.json();
-          setSummary(data);
-        }
-      } catch {}
-    };
-    fetchSummary();
-  }, []);
+  async function deleteMeal(id: string) {
+    setDeletingId(id);
+    try {
+      await fetch(`/api/track/meals?id=${id}`, { method: "DELETE" });
+      await mutate();
+    } catch (err) {
+      console.error("Delete failed", err);
+    }
+    setDeletingId(null);
+  }
+
+  const totals = summary?.totals ?? EMPTY_TOTALS;
+  const goals = summary?.goals ?? DEFAULT_GOALS;
+  const meals = summary?.meals ?? [];
 
   async function handleTextLog() {
     if (!textEntry.trim()) return;
     setAnalyzing(true);
+    setError("");
+
     try {
-      const res = await fetch("/api/track/analyze-text", {
+      // Step 1: Analyze the text with AI
+      const analysisRes = await fetch("/api/track/analyze-text", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: textEntry }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        setSummary((prev) => ({
-          ...prev,
-          meals: [
-            ...prev.meals,
-            {
-              id: Date.now().toString(),
-              name: textEntry,
-              mealType: "snack",
-              calories: data.calories ?? 0,
-              protein: data.protein ?? 0,
-              carbs: data.carbs ?? 0,
-              fat: data.fat ?? 0,
-              source: "text",
-              loggedAt: new Date().toISOString(),
-            },
-          ],
-          totals: {
-            calories: prev.totals.calories + (data.calories ?? 0),
-            protein: prev.totals.protein + (data.protein ?? 0),
-            carbs: prev.totals.carbs + (data.carbs ?? 0),
-            fat: prev.totals.fat + (data.fat ?? 0),
-          },
-        }));
-        setTextEntry("");
-        setShowTextInput(false);
-      }
-    } catch {}
+
+      if (!analysisRes.ok) throw new Error("Analysis failed");
+      const analysis = await analysisRes.json();
+
+      // The API returns { foods: [...], totalMacros: { calories, protein, carbs, fat } }
+      const macros = analysis.totalMacros ?? analysis;
+      const mealName =
+        analysis.foods?.length === 1
+          ? analysis.foods[0].name
+          : analysis.foods?.length > 1
+          ? analysis.foods.map((f: { name: string }) => f.name).join(", ")
+          : textEntry;
+
+      // Step 2: Save to database
+      const saveRes = await fetch("/api/track/meals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: mealName,
+          description: textEntry,
+          mealType: "snack",
+          calories: macros.calories ?? 0,
+          protein: macros.protein ?? 0,
+          carbs: macros.carbs ?? 0,
+          fat: macros.fat ?? 0,
+          source: "text",
+          loggedAt: new Date().toISOString(),
+        }),
+      });
+
+      if (!saveRes.ok) throw new Error("Failed to save meal");
+
+      // Step 3: Refresh from server
+      await mutate();
+      setTextEntry("");
+      setShowTextInput(false);
+    } catch (err) {
+      console.error(err);
+      setError("Something went wrong. Please try again.");
+    }
+
     setAnalyzing(false);
   }
 
@@ -154,8 +148,8 @@ export default function TrackPage() {
             </p>
             <div className="space-y-3.5">
               {MACRO_CONFIG.map(({ key, label, unit, color }) => {
-                const consumed = summary.totals[key];
-                const goal = summary.goals[key];
+                const consumed = totals[key];
+                const goal = goals[key];
                 const pct = goal > 0 ? Math.min(Math.round((consumed / goal) * 100), 100) : 0;
                 return (
                   <div key={key}>
@@ -165,7 +159,7 @@ export default function TrackPage() {
                       </span>
                       <div className="flex items-baseline gap-1">
                         <span className="text-sm font-black tabular-nums" style={{ color }}>
-                          {consumed}
+                          {Math.round(consumed)}
                         </span>
                         <span className="text-xs text-muted-foreground">
                           / {goal} {unit}
@@ -244,7 +238,7 @@ export default function TrackPage() {
         <Card className="overflow-hidden">
           <CardContent className="p-0">
             <button
-              onClick={() => setShowTextInput((s) => !s)}
+              onClick={() => { setShowTextInput((s) => !s); setError(""); }}
               className="w-full flex items-center gap-4 p-4 tap-scale"
             >
               <div
@@ -261,10 +255,7 @@ export default function TrackPage() {
               </div>
               <ChevronRight
                 size={16}
-                className={cn(
-                  "text-muted-foreground transition-transform",
-                  showTextInput && "rotate-90"
-                )}
+                className={cn("text-muted-foreground transition-transform", showTextInput && "rotate-90")}
               />
             </button>
 
@@ -277,13 +268,16 @@ export default function TrackPage() {
                   rows={3}
                   className="w-full mt-3 px-3 py-2.5 rounded-xl bg-muted/50 text-sm placeholder:text-muted-foreground/50 resize-none focus:outline-none focus:ring-1 focus:ring-[#54A0FF]/40 border border-border dark:border-white/5"
                 />
+                {error && (
+                  <p className="text-xs text-destructive">{error}</p>
+                )}
                 <Button
                   onClick={handleTextLog}
                   disabled={!textEntry.trim() || analyzing}
                   className="w-full"
                   style={{ background: "linear-gradient(135deg, #54A0FF, #7B8DE8)" }}
                 >
-                  {analyzing ? "Analyzing..." : "Log Meal"}
+                  {analyzing ? "Analyzing & saving..." : "Log Meal"}
                 </Button>
               </div>
             )}
@@ -297,27 +291,24 @@ export default function TrackPage() {
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
             Today&apos;s Meals
           </p>
-          <Link
-            href="/track/history"
-            className="text-xs text-[#FF6B6B] font-semibold hover:opacity-80"
-          >
+          <Link href="/track/history" className="text-xs text-[#FF6B6B] font-semibold hover:opacity-80">
             History
           </Link>
         </div>
 
-        {summary.meals.length === 0 ? (
+        {meals.length === 0 ? (
           <div className="text-center py-10 text-muted-foreground text-sm">
             No meals logged yet today. Start tracking!
           </div>
         ) : (
           <div className="space-y-2">
-            {summary.meals.map((meal) => {
-              const src = sourceBadge[meal.source];
+            {meals.map((meal) => {
+              const src = sourceBadge[meal.source] ?? sourceBadge.manual;
               return (
                 <Card key={meal.id} glass>
                   <CardContent className="py-3 px-4">
-                    <div className="flex items-start justify-between">
-                      <div className="min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-sm font-semibold truncate">{meal.name}</span>
                         </div>
@@ -334,16 +325,26 @@ export default function TrackPage() {
                           </span>
                         </div>
                       </div>
-                      <div className="text-right shrink-0 ml-3">
-                        <span className="text-base font-black" style={{ color: "#FF9F43" }}>
-                          {meal.calories}
-                        </span>
-                        <span className="text-xs text-muted-foreground ml-0.5">kcal</span>
-                        <div className="flex gap-2 mt-0.5 text-[10px] text-muted-foreground">
-                          <span style={{ color: "#54A0FF" }}>P {meal.protein}g</span>
-                          <span style={{ color: "#FECA57" }}>C {meal.carbs}g</span>
-                          <span style={{ color: "#A29BFE" }}>F {meal.fat}g</span>
+                      <div className="flex items-start gap-3 shrink-0">
+                        <div className="text-right">
+                          <span className="text-base font-black" style={{ color: "#FF9F43" }}>
+                            {Math.round(meal.calories)}
+                          </span>
+                          <span className="text-xs text-muted-foreground ml-0.5">kcal</span>
+                          <div className="flex gap-2 mt-0.5 text-[10px] text-muted-foreground">
+                            <span style={{ color: "#54A0FF" }}>P {Math.round(meal.protein)}g</span>
+                            <span style={{ color: "#FECA57" }}>C {Math.round(meal.carbs)}g</span>
+                            <span style={{ color: "#A29BFE" }}>F {Math.round(meal.fat)}g</span>
+                          </div>
                         </div>
+                        <button
+                          onClick={() => deleteMeal(meal.id)}
+                          disabled={deletingId === meal.id}
+                          className="mt-0.5 p-1.5 rounded-lg text-muted-foreground hover:text-red-400 hover:bg-red-400/10 transition-colors disabled:opacity-40"
+                          aria-label="Delete meal"
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </div>
                     </div>
                   </CardContent>

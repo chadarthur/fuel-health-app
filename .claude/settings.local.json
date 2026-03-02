@@ -20,7 +20,8 @@
       "Bash(__NEW_LINE_6bccf0f346812af7__ echo \"=== goals/page.tsx ===\")",
       "Bash(npx tsc --noEmit --skipLibCheck)",
       "mcp__Claude_Preview__preview_start",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://192.168.86.22:3000/dashboard)"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://192.168.86.22:3000/dashboard)",
+      "Bash(grep -l \"NEXTAUTH\" /Users/chadcalcagno/Desktop/HealthSuperApp/.env*)"
     ]
   }
 }

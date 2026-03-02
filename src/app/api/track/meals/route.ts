@@ -1,25 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-
-const USER_ID = "demo-user";
-
-async function ensureDemoUser() {
-  await prisma.user.upsert({
-    where: { id: USER_ID },
-    update: {},
-    create: { id: USER_ID, name: "Demo User", email: "demo@fuel.app" },
-  });
-}
+import { requireUser } from "@/lib/session";
 
 export async function GET(req: NextRequest) {
   try {
-    await ensureDemoUser();
+    const auth = await requireUser();
+    if (auth.error) return auth.error;
+    const { userId } = auth;
+
     const { searchParams } = new URL(req.url);
     const date = searchParams.get("date");
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
 
-    let where: { userId: string; loggedAt?: { gte: Date; lte: Date } } = { userId: USER_ID };
+    let where: { userId: string; loggedAt?: { gte: Date; lte: Date } } = { userId };
 
     if (date) {
       const start = new Date(date);
@@ -56,11 +50,14 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    await ensureDemoUser();
+    const auth = await requireUser();
+    if (auth.error) return auth.error;
+    const { userId } = auth;
+
     const body = await req.json();
     const meal = await prisma.mealEntry.create({
       data: {
-        userId: USER_ID,
+        userId,
         name: body.name,
         description: body.description ?? null,
         mealType: body.mealType || "snack",
@@ -85,11 +82,15 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
+    const auth = await requireUser();
+    if (auth.error) return auth.error;
+    const { userId } = auth;
+
     const body = await req.json();
     const { id, ...data } = body;
     if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
 
-    await prisma.mealEntry.updateMany({ where: { id, userId: USER_ID }, data });
+    await prisma.mealEntry.updateMany({ where: { id, userId }, data });
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("Meals PUT error:", err);
@@ -99,11 +100,15 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    const auth = await requireUser();
+    if (auth.error) return auth.error;
+    const { userId } = auth;
+
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
     if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
 
-    await prisma.mealEntry.deleteMany({ where: { id, userId: USER_ID } });
+    await prisma.mealEntry.deleteMany({ where: { id, userId } });
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("Meals DELETE error:", err);

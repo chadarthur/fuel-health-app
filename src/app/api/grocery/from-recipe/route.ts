@@ -2,16 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { categorizeIngredient } from "@/lib/grocery-utils";
 import type { RecipeIngredient } from "@/types/recipe";
-
-const USER_ID = "demo-user";
+import { requireUser } from "@/lib/session";
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = await requireUser();
+    if (auth.error) return auth.error;
+    const { userId } = auth;
+
     const { recipeId } = await req.json();
     if (!recipeId) return NextResponse.json({ error: "recipeId required" }, { status: 400 });
 
     const recipe = await prisma.savedRecipe.findFirst({
-      where: { id: recipeId, userId: USER_ID },
+      where: { id: recipeId, userId },
     });
     if (!recipe) return NextResponse.json({ error: "Recipe not found" }, { status: 404 });
 
@@ -24,13 +27,11 @@ export async function POST(req: NextRequest) {
       const name = ing.name.toLowerCase().trim();
       const category = categorizeIngredient(name);
 
-      // Check for existing item with same name
       const existing = await prisma.groceryItem.findFirst({
-        where: { userId: USER_ID, name: { equals: name }, checked: false },
+        where: { userId, name: { equals: name }, checked: false },
       });
 
       if (existing) {
-        // Merge quantities if units match
         if (existing.unit === ing.unit && ing.amount) {
           await prisma.groceryItem.update({
             where: { id: existing.id },
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
       } else {
         await prisma.groceryItem.create({
           data: {
-            userId: USER_ID,
+            userId,
             name,
             quantity: ing.amount || null,
             unit: ing.unit || null,

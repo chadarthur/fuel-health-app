@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(getMockAnalysis(text));
     }
 
-    const provider = getAIProvider();
+    const provider = getAIProvider("anthropic");
     const result = await provider.complete({
       messages: [
         { role: "system", content: FOOD_TEXT_ANALYSIS_PROMPT },
