@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
+import { signOut } from "next-auth/react";
 import {
   Target,
   Activity,
@@ -16,6 +17,7 @@ import {
   Check,
   Unlink,
   Loader2,
+  LogOut,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
@@ -419,6 +421,18 @@ export default function SettingsPage() {
               danger
             />
           </Card>
+        </section>
+
+        {/* ── Sign Out ── */}
+        <section>
+          <Button
+            variant="outline"
+            className="w-full gap-2 text-[#FF6B6B] border-[#FF6B6B]/30 hover:bg-[#FF6B6B]/10 hover:text-[#FF6B6B]"
+            onClick={() => signOut({ callbackUrl: "/login" })}
+          >
+            <LogOut size={15} />
+            Sign Out
+          </Button>
         </section>
 
         {/* App info footer */}
