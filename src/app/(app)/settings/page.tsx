@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import {
   Target,
   Activity,
@@ -33,14 +33,6 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 
-// ─── Profile data ─────────────────────────────────────────────────────────────
-
-const DEMO_PROFILE = {
-  name: "Demo User",
-  email: "demo@fuel.app",
-  initials: "D",
-  joinDate: "January 2025",
-};
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
@@ -256,8 +248,14 @@ function WhoopSection() {
 
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
+  const { data: session } = useSession();
   const [showClearDialog, setShowClearDialog] = useState(false);
   const [exportDone, setExportDone] = useState(false);
+
+  const userName = session?.user?.name ?? session?.user?.email?.split("@")[0] ?? "User";
+  const userEmail = session?.user?.email ?? "";
+  const userInitial = userName.charAt(0).toUpperCase();
+  const joinDate = ""; // not stored in session
 
   const themeOptions: {
     value: ThemeOption;
@@ -313,17 +311,19 @@ export default function SettingsPage() {
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#FF6B6B] to-[#00D4AA] flex items-center justify-center shrink-0">
                   <span className="text-white text-2xl font-black">
-                    {DEMO_PROFILE.initials}
+                    {userInitial}
                   </span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-base">{DEMO_PROFILE.name}</p>
+                  <p className="font-bold text-base">{userName}</p>
                   <p className="text-sm text-muted-foreground">
-                    {DEMO_PROFILE.email}
+                    {userEmail}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Member since {DEMO_PROFILE.joinDate}
-                  </p>
+                  {joinDate && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Member since {joinDate}
+                    </p>
+                  )}
                 </div>
                 <button
                   disabled
