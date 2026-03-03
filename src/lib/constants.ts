@@ -57,7 +57,7 @@ export const MACRO_COLORS = {
 export const NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard", icon: "LayoutDashboard" },
   { label: "Recipes", href: "/recipes", icon: "ChefHat" },
-  { label: "Grocery", href: "/grocery", icon: "ShoppingCart" },
   { label: "Track", href: "/track", icon: "Target" },
   { label: "Insights", href: "/insights", icon: "TrendingUp" },
+  { label: "Settings", href: "/settings", icon: "Settings" },
 ] as const;

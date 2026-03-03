@@ -5,9 +5,9 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   ChefHat,
-  ShoppingCart,
   Target,
   TrendingUp,
+  Settings,
   type LucideIcon,
 } from "lucide-react";
 import { NAV_ITEMS } from "@/lib/constants";
@@ -16,9 +16,9 @@ import { cn } from "@/lib/utils";
 const iconMap: Record<string, LucideIcon> = {
   LayoutDashboard,
   ChefHat,
-  ShoppingCart,
   Target,
   TrendingUp,
+  Settings,
 };
 
 export function BottomNav() {
@@ -44,7 +44,7 @@ export function BottomNav() {
               href={item.href}
               className={cn(
                 "relative flex flex-col items-center justify-center gap-0.5",
-                "w-14 py-1.5 rounded-xl",
+                "w-12 py-1.5 rounded-xl",
                 "transition-all duration-200 tap-scale",
                 isActive
                   ? "text-transparent"
