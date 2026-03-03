@@ -7,7 +7,7 @@ import {
   ChefHat,
   Target,
   TrendingUp,
-  Settings,
+  Cog,
   type LucideIcon,
 } from "lucide-react";
 import { NAV_ITEMS } from "@/lib/constants";
@@ -18,7 +18,7 @@ const iconMap: Record<string, LucideIcon> = {
   ChefHat,
   Target,
   TrendingUp,
-  Settings,
+  Settings: Cog,
 };
 
 export function BottomNav() {
