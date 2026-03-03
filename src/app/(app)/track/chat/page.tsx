@@ -274,6 +274,10 @@ function TodaysPanel({ meals }: TodaysPanelProps) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+function getLocalDate(d = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
   const [input, setInput] = useState("");
@@ -292,8 +296,9 @@ export default function ChatPage() {
   useEffect(() => {
     const fetchMeals = async () => {
       try {
+        const tz = new Date().getTimezoneOffset();
         const res = await fetch(
-          `/api/track/meals?date=${new Date().toISOString().split("T")[0]}`
+          `/api/track/meals?date=${getLocalDate()}&tz=${tz}`
         );
         if (res.ok) {
           const data = await res.json();
@@ -329,7 +334,8 @@ export default function ChatPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: [...history, { role: "user", content: userText }],
-          date: new Date().toISOString().split("T")[0],
+          date: getLocalDate(),
+          tz: new Date().getTimezoneOffset(),
         }),
       });
 

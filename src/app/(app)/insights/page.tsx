@@ -222,9 +222,11 @@ const METRIC_CONFIG: Record<ChartMetric, { key: keyof DayData; color: string }> 
 export default function InsightsPage() {
   const [activeMetric, setActiveMetric] = useState<ChartMetric>("Recovery");
 
-  // Date range for API fetch (last 7 days)
-  const endDate = new Date().toISOString().split("T")[0];
-  const startDate = new Date(Date.now() - 6 * 86400000).toISOString().split("T")[0];
+  // Date range for API fetch (last 7 days) — use local date, not UTC
+  const _now = new Date();
+  const endDate = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
+  const _start = new Date(_now); _start.setDate(_start.getDate() - 6);
+  const startDate = `${_start.getFullYear()}-${String(_start.getMonth() + 1).padStart(2, "0")}-${String(_start.getDate()).padStart(2, "0")}`;
 
   const { data: whoopRaw } = useSWR<WhoopDailyMetrics[]>(
     `/api/whoop?startDate=${startDate}&endDate=${endDate}`,

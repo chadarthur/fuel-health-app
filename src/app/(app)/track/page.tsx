@@ -43,11 +43,17 @@ function formatRelativeTime(iso: string): string {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+function getLocalDate(d = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+const TZ = typeof window !== "undefined" ? new Date().getTimezoneOffset() : 0;
+
 export default function TrackPage() {
-  const today = new Date().toISOString().split("T")[0];
+  const today = getLocalDate();
 
   const { data: summary, mutate } = useSWR<DailySummary>(
-    `/api/track/summary?date=${today}`,
+    `/api/track/summary?date=${today}&tz=${TZ}`,
     fetcher,
     { refreshInterval: 0 }
   );

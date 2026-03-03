@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
+import { getUtcDayRange } from "@/lib/date-utils";
 
 export async function GET(req: NextRequest) {
   try {
@@ -12,20 +13,16 @@ export async function GET(req: NextRequest) {
     const date = searchParams.get("date");
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
+    const tzOffset = parseInt(searchParams.get("tz") ?? "0", 10);
 
     let where: { userId: string; loggedAt?: { gte: Date; lte: Date } } = { userId };
 
     if (date) {
-      const start = new Date(date);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(date);
-      end.setHours(23, 59, 59, 999);
+      const { start, end } = getUtcDayRange(date, tzOffset);
       where.loggedAt = { gte: start, lte: end };
     } else if (startDate && endDate) {
-      const start = new Date(startDate);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
+      const { start } = getUtcDayRange(startDate, tzOffset);
+      const { end } = getUtcDayRange(endDate, tzOffset);
       where.loggedAt = { gte: start, lte: end };
     }
 

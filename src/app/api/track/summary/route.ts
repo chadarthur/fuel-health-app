@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
+import { getUtcDayRange } from "@/lib/date-utils";
 
 const DEFAULT_GOALS = { calories: 2000, protein: 150, carbs: 250, fat: 65 };
 
@@ -13,6 +14,8 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const date = searchParams.get("date") || new Date().toISOString().split("T")[0];
     const period = searchParams.get("period");
+    // Client sends getTimezoneOffset() — positive = west of UTC (e.g. EST=300), negative = east
+    const tzOffset = parseInt(searchParams.get("tz") ?? "0", 10);
 
     const goalsRow = await prisma.macroGoal.findUnique({ where: { userId } });
     const goals = goalsRow
@@ -24,12 +27,13 @@ export async function GET(req: NextRequest) {
       const dailyBreakdown = [];
 
       for (let i = days - 1; i >= 0; i--) {
-        const d = new Date(date);
-        d.setDate(d.getDate() - i);
+        // Step back i days from the anchor date using UTC to avoid DST issues
+        const anchorMs = new Date(`${date}T00:00:00.000Z`).getTime();
+        const dayMs = anchorMs - i * 24 * 60 * 60 * 1000;
+        const d = new Date(dayMs);
         const dayStr = d.toISOString().split("T")[0];
 
-        const start = new Date(dayStr); start.setHours(0, 0, 0, 0);
-        const end = new Date(dayStr); end.setHours(23, 59, 59, 999);
+        const { start, end } = getUtcDayRange(dayStr, tzOffset);
 
         const meals = await prisma.mealEntry.findMany({
           where: { userId, loggedAt: { gte: start, lte: end } },
@@ -51,8 +55,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ period, date, goals, dailyBreakdown });
     }
 
-    const start = new Date(date); start.setHours(0, 0, 0, 0);
-    const end = new Date(date); end.setHours(23, 59, 59, 999);
+    const { start, end } = getUtcDayRange(date, tzOffset);
 
     const meals = await prisma.mealEntry.findMany({
       where: { userId, loggedAt: { gte: start, lte: end } },

@@ -44,8 +44,14 @@ interface WhoopMetrics {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+function getLocalDate(d = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+const TZ = typeof window !== "undefined" ? new Date().getTimezoneOffset() : 0;
+
 function getToday() {
-  return new Date().toISOString().split("T")[0];
+  return getLocalDate();
 }
 
 function getDateRange(days: number) {
@@ -53,8 +59,8 @@ function getDateRange(days: number) {
   const start = new Date();
   start.setDate(start.getDate() - (days - 1));
   return {
-    startDate: start.toISOString().split("T")[0],
-    endDate: end.toISOString().split("T")[0],
+    startDate: getLocalDate(start),
+    endDate: getLocalDate(end),
   };
 }
 
@@ -175,13 +181,13 @@ export default function DashboardPage() {
 
   // Real data
   const { data: summary } = useSWR<DaySummary>(
-    `/api/track/summary?date=${today}`,
+    `/api/track/summary?date=${today}&tz=${TZ}`,
     fetcher,
     { refreshInterval: 30000 }
   );
 
   const { data: weekly } = useSWR<WeeklySummary>(
-    `/api/track/summary?period=week&date=${today}`,
+    `/api/track/summary?period=week&date=${today}&tz=${TZ}`,
     fetcher,
     { refreshInterval: 60000 }
   );

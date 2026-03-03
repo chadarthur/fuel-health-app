@@ -75,7 +75,7 @@ const fetcher = (url: string) =>
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function toDateString(date: Date): string {
-  return date.toISOString().split("T")[0];
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function formatDateHeader(date: Date): string {
@@ -139,8 +139,10 @@ export default function HistoryPage() {
 
   const dateStr = toDateString(currentDate);
 
+  const tz = typeof window !== "undefined" ? new Date().getTimezoneOffset() : 0;
+
   const { data, isLoading } = useSWR(
-    `/api/track/meals?date=${dateStr}`,
+    `/api/track/meals?date=${dateStr}&tz=${tz}`,
     fetcher,
     {
       onErrorRetry: () => {},

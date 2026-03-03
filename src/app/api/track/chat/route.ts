@@ -3,23 +3,19 @@ import { getAIProvider } from "@/lib/ai/provider";
 import { MEAL_CHAT_SYSTEM_PROMPT } from "@/lib/ai/prompts";
 import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import { getUtcDayRange } from "@/lib/date-utils";
 import type { AIMessage } from "@/types/ai";
 
 const DEFAULT_GOALS = { calories: 2000, protein: 150, carbs: 250, fat: 65 };
 
-async function buildContextualSystemPrompt(userId: string, date: string): Promise<string> {
+async function buildContextualSystemPrompt(userId: string, date: string, tzOffset: number): Promise<string> {
   try {
+    const { start, end } = getUtcDayRange(date, tzOffset);
     // Fetch today's macro data and saved recipes in parallel
     const [goalsRow, todayMeals, savedRecipes] = await Promise.all([
       prisma.macroGoal.findUnique({ where: { userId } }),
       prisma.mealEntry.findMany({
-        where: {
-          userId,
-          loggedAt: {
-            gte: new Date(`${date}T00:00:00.000Z`),
-            lte: new Date(`${date}T23:59:59.999Z`),
-          },
-        },
+        where: { userId, loggedAt: { gte: start, lte: end } },
       }),
       prisma.savedRecipe.findMany({
         where: { userId },
@@ -91,7 +87,7 @@ export async function POST(req: NextRequest) {
     const { userId } = auth;
 
     const body = await req.json();
-    const { messages = [], date } = body;
+    const { messages = [], date, tz = 0 } = body;
     const today = date || new Date().toISOString().split("T")[0];
 
     console.log("[chat] received messages count:", messages.length);
@@ -106,7 +102,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Build system prompt with today's macro context + saved recipes
-    const systemPrompt = await buildContextualSystemPrompt(userId, today);
+    const systemPrompt = await buildContextualSystemPrompt(userId, today, tz);
 
     const aiMessages: AIMessage[] = messages.map((m: { role: string; content: string }) => ({
       role: m.role as "user" | "assistant",
