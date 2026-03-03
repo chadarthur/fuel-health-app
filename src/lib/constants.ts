@@ -59,5 +59,4 @@ export const NAV_ITEMS = [
   { label: "Recipes", href: "/recipes", icon: "ChefHat" },
   { label: "Track", href: "/track", icon: "Target" },
   { label: "Insights", href: "/insights", icon: "TrendingUp" },
-  { label: "Settings", href: "/settings", icon: "Settings" },
 ] as const;
