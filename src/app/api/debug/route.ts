@@ -1,18 +1,21 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
-  const users = await prisma.user.findMany({
-    select: {
-      id: true,
-      email: true,
-      createdAt: true,
-      _count: {
-        select: { mealEntries: true },
-      },
-    },
-    orderBy: { createdAt: "asc" },
-  });
+  const session = await getServerSession(authOptions);
+  const sessionUserId = (session?.user as { id?: string } | undefined)?.id;
+  const sessionEmail = session?.user?.email;
 
-  return NextResponse.json({ users });
+  let mealCount = 0;
+  if (sessionUserId) {
+    mealCount = await prisma.mealEntry.count({ where: { userId: sessionUserId } });
+  }
+
+  return NextResponse.json({
+    sessionUserId,
+    sessionEmail,
+    mealCount,
+  });
 }
