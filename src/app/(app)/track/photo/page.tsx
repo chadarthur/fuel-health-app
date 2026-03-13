@@ -18,6 +18,7 @@ export default function PhotoLogPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<EditableFoodItem[] | null>(null);
   const [logging, setLogging] = useState(false);
   const [logged, setLogged] = useState(false);
@@ -29,6 +30,7 @@ export default function PhotoLogPage() {
     const url = URL.createObjectURL(file);
     setSelectedImage(url);
     setAnalysisResult(null);
+    setAnalysisError(null);
     setLogged(false);
   }
 
@@ -42,6 +44,7 @@ export default function PhotoLogPage() {
   async function analyzePhoto() {
     if (!selectedFile) return;
     setAnalyzing(true);
+    setAnalysisError(null);
     try {
       const formData = new FormData();
       formData.append("image", selectedFile);
@@ -51,17 +54,23 @@ export default function PhotoLogPage() {
         body: formData,
       });
 
-      if (res.ok) {
-        const data: PhotoAnalysisResult = await res.json();
-        setAnalysisResult(
-          data.foods.map((f, i) => ({ ...f, id: String(i) }))
-        );
-      } else {
-        // Fallback mock
-        setAnalysisResult(getMockAnalysis());
+      const data = await res.json();
+
+      if (!res.ok) {
+        setAnalysisError(data.error || "Analysis failed. Please try again.");
+        return;
       }
+
+      if (!data.foods?.length) {
+        setAnalysisError("No food detected in this image. Try a clearer photo.");
+        return;
+      }
+
+      setAnalysisResult(
+        (data as PhotoAnalysisResult).foods.map((f, i) => ({ ...f, id: String(i) }))
+      );
     } catch {
-      setAnalysisResult(getMockAnalysis());
+      setAnalysisError("Network error. Check your connection and try again.");
     } finally {
       setAnalyzing(false);
     }
@@ -185,6 +194,7 @@ export default function PhotoLogPage() {
                 setSelectedImage(null);
                 setSelectedFile(null);
                 setAnalysisResult(null);
+                setAnalysisError(null);
                 setLogged(false);
               }}
               className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/70 backdrop-blur-sm flex items-center justify-center hover:bg-black/90 transition-colors"
@@ -218,6 +228,13 @@ export default function PhotoLogPage() {
               </>
             )}
           </Button>
+        )}
+
+        {/* Error state */}
+        {analysisError && (
+          <div className="rounded-2xl border border-[#FF6B6B]/30 bg-[#FF6B6B]/10 px-4 py-3 text-sm text-[#FF6B6B]">
+            {analysisError}
+          </div>
         )}
 
         {/* Analysis results */}
@@ -360,12 +377,3 @@ export default function PhotoLogPage() {
   );
 }
 
-// ─── Mock ─────────────────────────────────────────────────────────────────────
-
-function getMockAnalysis(): EditableFoodItem[] {
-  return [
-    { id: "0", name: "Grilled Chicken Breast", calories: 320, protein: 58, carbs: 0, fat: 8, confidence: 0.92 },
-    { id: "1", name: "Brown Rice", calories: 215, protein: 5, carbs: 45, fat: 2, confidence: 0.87 },
-    { id: "2", name: "Steamed Broccoli", calories: 55, protein: 4, carbs: 10, fat: 0, confidence: 0.95 },
-  ];
-}

@@ -19,7 +19,10 @@ export async function POST(req: NextRequest) {
     const hasApiKey = process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY;
 
     if (!hasApiKey) {
-      return NextResponse.json(getMockPhotoAnalysis());
+      return NextResponse.json(
+        { error: "No AI API key configured. Add OPENAI_API_KEY or ANTHROPIC_API_KEY to your environment." },
+        { status: 503 }
+      );
     }
 
     // Use OpenAI for vision (best in class) or fallback to Anthropic
@@ -50,17 +53,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(parsed);
   } catch (err) {
     console.error("Photo analysis error:", err);
-    return NextResponse.json({ error: "Analysis failed" }, { status: 500 });
+    const message = err instanceof Error ? err.message : "Analysis failed";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-}
-
-function getMockPhotoAnalysis() {
-  return {
-    foods: [
-      { name: "Grilled Chicken Breast", portionDescription: "6 oz", calories: 280, protein: 53, carbs: 0, fat: 6, confidence: 0.88 },
-      { name: "Steamed Broccoli", portionDescription: "1 cup", calories: 55, protein: 4, carbs: 11, fat: 1, confidence: 0.92 },
-      { name: "Brown Rice", portionDescription: "¾ cup cooked", calories: 165, protein: 4, carbs: 35, fat: 1, confidence: 0.85 },
-    ],
-    totalMacros: { calories: 500, protein: 61, carbs: 46, fat: 8 },
-  };
 }
