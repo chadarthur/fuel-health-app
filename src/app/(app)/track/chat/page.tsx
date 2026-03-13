@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, ChevronLeft, CheckCircle, Clock, ShoppingCart, BookmarkPlus, Sparkles } from "lucide-react";
+import { Send, ChevronLeft, CheckCircle, Clock, ShoppingCart, BookmarkPlus, Sparkles, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import type { MealEntryData } from "@/types/macro";
+import type { RecipeIngredient } from "@/types/recipe";
+import { IngredientPickerSheet } from "@/components/grocery/IngredientPickerSheet";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -147,6 +149,7 @@ interface RecipeSuggestionCardProps {
   onAddToGrocery?: (recipeId: string) => void;
   onSaveRecipe?: (suggestion: RecipeSuggestionData) => void;
   groceryAdded: boolean;
+  groceryLoading?: boolean;
   recipeSaved: boolean;
 }
 
@@ -155,6 +158,7 @@ function RecipeSuggestionCard({
   onAddToGrocery,
   onSaveRecipe,
   groceryAdded,
+  groceryLoading = false,
   recipeSaved,
 }: RecipeSuggestionCardProps) {
   return (
@@ -204,7 +208,7 @@ function RecipeSuggestionCard({
           {suggestion.fromSaved && suggestion.recipeId && onAddToGrocery ? (
             <button
               onClick={() => onAddToGrocery(suggestion.recipeId!)}
-              disabled={groceryAdded}
+              disabled={groceryAdded || groceryLoading}
               className={cn(
                 "flex-1 flex items-center justify-center gap-1 py-2 rounded-xl text-xs font-bold transition-all tap-scale",
                 groceryAdded
@@ -212,8 +216,12 @@ function RecipeSuggestionCard({
                   : "bg-[#00D4AA]/10 text-[#00D4AA] hover:bg-[#00D4AA]/20"
               )}
             >
-              <ShoppingCart size={11} />
-              {groceryAdded ? "Added!" : "Add to Grocery"}
+              {groceryLoading ? (
+                <Loader2 size={11} className="animate-spin" />
+              ) : (
+                <ShoppingCart size={11} />
+              )}
+              {groceryAdded ? "Added!" : groceryLoading ? "Loading..." : "Add to Grocery"}
             </button>
           ) : !suggestion.fromSaved && onSaveRecipe ? (
             <button
@@ -284,8 +292,11 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false);
   const [loggedMealIds, setLoggedMealIds] = useState<Set<string>>(new Set());
   const [groceryAddedIds, setGroceryAddedIds] = useState<Set<string>>(new Set());
+  const [groceryLoadingKey, setGroceryLoadingKey] = useState<string | null>(null);
   const [savedSuggestionIds, setSavedSuggestionIds] = useState<Set<string>>(new Set());
   const [todaysMeals, setTodaysMeals] = useState<MealEntryData[]>([]);
+  const [sheetRecipe, setSheetRecipe] = useState<{ id: string; title: string; ingredients: RecipeIngredient[] } | null>(null);
+  const [pendingGroceryKey, setPendingGroceryKey] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [containerHeight, setContainerHeight] = useState<string>("calc(100dvh - 4rem)");
@@ -471,16 +482,33 @@ export default function ChatPage() {
   }
 
   async function addSuggestionToGrocery(suggestionKey: string, recipeId: string) {
+    // Fetch recipe with ingredients then open the picker sheet
+    setGroceryLoadingKey(suggestionKey);
     try {
-      await fetch("/api/grocery/from-recipe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recipeId }),
-      });
-      setGroceryAddedIds((prev) => new Set([...prev, suggestionKey]));
-    } catch {
-      setGroceryAddedIds((prev) => new Set([...prev, suggestionKey]));
+      const res = await fetch(`/api/recipes/saved/${recipeId}`);
+      if (res.ok) {
+        const recipe = await res.json();
+        setPendingGroceryKey(suggestionKey);
+        setSheetRecipe({
+          id: recipe.id,
+          title: recipe.title,
+          ingredients: recipe.ingredients ?? [],
+        });
+      }
+    } finally {
+      setGroceryLoadingKey(null);
     }
+  }
+
+  function handleSheetSuccess(added: number, merged: number) {
+    // Mark the pending suggestion key as added
+    if (pendingGroceryKey) {
+      setGroceryAddedIds((prev) => new Set([...prev, pendingGroceryKey]));
+      setPendingGroceryKey(null);
+    }
+    // Keep added count in mind (merged is fine too)
+    void added; void merged;
+    setSheetRecipe(null);
   }
 
   async function saveSuggestedRecipe(suggestionKey: string, suggestion: RecipeSuggestionData) {
@@ -584,6 +612,7 @@ export default function ChatPage() {
                               : undefined
                           }
                           groceryAdded={groceryAddedIds.has(key)}
+                          groceryLoading={groceryLoadingKey === key}
                           recipeSaved={savedSuggestionIds.has(key)}
                         />
                       );
@@ -695,6 +724,14 @@ export default function ChatPage() {
 
       {/* Desktop side panel */}
       <TodaysPanel meals={todaysMeals} />
+
+      {/* Ingredient Picker Sheet for saved recipe suggestions */}
+      <IngredientPickerSheet
+        isOpen={sheetRecipe !== null}
+        onClose={() => { setSheetRecipe(null); setPendingGroceryKey(null); }}
+        recipe={sheetRecipe}
+        onSuccess={handleSheetSuccess}
+      />
     </div>
   );
 }
