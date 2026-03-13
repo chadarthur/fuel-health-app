@@ -288,10 +288,24 @@ export default function ChatPage() {
   const [todaysMeals, setTodaysMeals] = useState<MealEntryData[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [containerHeight, setContainerHeight] = useState<string>("calc(100dvh - 4rem)");
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // iOS Safari: resize container when virtual keyboard opens/closes
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => {
+      const navHeight = 64; // 4rem bottom nav
+      setContainerHeight(`${vv.height - navHeight}px`);
+    };
+    vv.addEventListener("resize", update);
+    update();
+    return () => vv.removeEventListener("resize", update);
+  }, []);
 
   useEffect(() => {
     const fetchMeals = async () => {
@@ -500,7 +514,7 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex h-[calc(100dvh-4rem)] flex-col md:flex-row bg-background">
+    <div className="flex flex-col md:flex-row bg-background" style={{ height: containerHeight }}>
       {/* Chat area */}
       <div className="flex flex-col flex-1 min-w-0">
         {/* Header */}

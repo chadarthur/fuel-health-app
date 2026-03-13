@@ -43,7 +43,7 @@ export function BottomNav() {
               href={href}
               className={cn(
                 "relative flex flex-col items-center justify-center gap-0.5",
-                "w-11 py-1.5 rounded-xl",
+                "flex-1 py-1.5 rounded-xl",
                 "transition-all duration-200 tap-scale",
                 isActive
                   ? "text-transparent"
