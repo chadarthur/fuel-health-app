@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import useSWR from "swr";
+import Image from "next/image";
 import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -149,9 +150,11 @@ export default function HistoryPage() {
     }
   );
 
-  // Use API data if available, otherwise fall back to mock data
-  const meals: MealEntryData[] =
-    data?.meals ?? getMockMealsForDate(new Date(currentDate));
+  // /api/track/meals returns a bare array — fall back to mock data only
+  // while loading or if the request actually failed.
+  const meals: MealEntryData[] = Array.isArray(data)
+    ? data
+    : getMockMealsForDate(new Date(currentDate));
 
   const groupedMeals = MEAL_ORDER.reduce<Record<MealType, MealEntryData[]>>(
     (acc, type) => {
@@ -300,6 +303,17 @@ export default function HistoryPage() {
                     <Card key={meal.id} glass>
                       <CardContent className="py-3 px-4">
                         <div className="flex items-start justify-between gap-3">
+                          {meal.imageUrl && (
+                            <div className="relative w-12 h-12 rounded-lg overflow-hidden shrink-0">
+                              <Image
+                                src={meal.imageUrl}
+                                alt={meal.name}
+                                fill
+                                sizes="48px"
+                                className="object-cover"
+                              />
+                            </div>
+                          )}
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-semibold truncate mb-1.5">
                               {meal.name}

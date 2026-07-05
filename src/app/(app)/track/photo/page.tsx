@@ -22,6 +22,7 @@ export default function PhotoLogPage() {
   const [analysisResult, setAnalysisResult] = useState<EditableFoodItem[] | null>(null);
   const [logging, setLogging] = useState(false);
   const [logged, setLogged] = useState(false);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function handleFileChange(file: File) {
@@ -32,6 +33,23 @@ export default function PhotoLogPage() {
     setAnalysisResult(null);
     setAnalysisError(null);
     setLogged(false);
+    setPhotoUrl(null);
+  }
+
+  // Persist the photo to Blob storage so it survives after logging — this
+  // runs alongside AI analysis and never blocks it; a failure here just
+  // means the meal gets logged without a saved photo.
+  async function uploadPhoto(file: File) {
+    try {
+      const { upload } = await import("@vercel/blob/client");
+      const blob = await upload(`meal-photos/${file.name}`, file, {
+        access: "public",
+        handleUploadUrl: "/api/blob/upload",
+      });
+      setPhotoUrl(blob.url);
+    } catch (err) {
+      console.error("Photo upload error:", err);
+    }
   }
 
   const onDrop = useCallback((e: React.DragEvent) => {
@@ -45,6 +63,7 @@ export default function PhotoLogPage() {
     if (!selectedFile) return;
     setAnalyzing(true);
     setAnalysisError(null);
+    uploadPhoto(selectedFile); // fire-and-forget alongside analysis
     try {
       const formData = new FormData();
       formData.append("image", selectedFile);
@@ -113,6 +132,7 @@ export default function PhotoLogPage() {
           carbs: totals.carbs,
           fat: totals.fat,
           source: "photo",
+          imageUrl: photoUrl ?? undefined,
         }),
       });
       setLogged(true);

@@ -464,11 +464,19 @@ function PaprikaImportRow() {
     setImporting(true);
     setResult(null);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
+      // Upload straight from the browser to Blob storage first — Paprika
+      // exports routinely exceed the ~4.5MB request-body limit on
+      // serverless functions, so the file never goes through our API route.
+      const { upload } = await import("@vercel/blob/client");
+      const blob = await upload(`paprika-imports/${file.name}`, file, {
+        access: "public",
+        handleUploadUrl: "/api/blob/upload",
+      });
+
       const res = await fetch("/api/recipes/import-paprika", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blobUrl: blob.url }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -479,7 +487,8 @@ function PaprikaImportRow() {
             (data.skipped ? ` (${data.skipped} already existed)` : "")
         );
       }
-    } catch {
+    } catch (err) {
+      console.error("Paprika import error:", err);
       setResult("Import failed");
     } finally {
       setImporting(false);

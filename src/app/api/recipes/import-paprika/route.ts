@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { gunzipSync } from "zlib";
 import JSZip from "jszip";
+import { del } from "@vercel/blob";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import type { RecipeIngredient } from "@/types/recipe";
@@ -131,16 +132,27 @@ export async function POST(req: NextRequest) {
     if (auth.error) return auth.error;
     const { userId } = auth;
 
-    const formData = await req.formData();
-    const file = formData.get("file") as File | null;
-    if (!file) {
+    // The file is uploaded directly from the browser to Vercel Blob (see
+    // src/app/api/blob/upload/route.ts) to avoid the ~4.5MB request body
+    // limit on serverless functions — Paprika exports routinely exceed that.
+    // We're just given the resulting blob URL to fetch and process.
+    const { blobUrl } = await req.json();
+    if (!blobUrl || typeof blobUrl !== "string") {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
-    if (file.size > 50 * 1024 * 1024) {
-      return NextResponse.json({ error: "File too large (max 50MB)" }, { status: 400 });
+
+    let buffer: Buffer;
+    try {
+      const blobRes = await fetch(blobUrl);
+      if (!blobRes.ok) throw new Error(`blob fetch ${blobRes.status}`);
+      buffer = Buffer.from(await blobRes.arrayBuffer());
+    } catch (e) {
+      console.error("[paprika] failed to fetch blob:", e);
+      return NextResponse.json({ error: "Failed to read the uploaded file. Try again." }, { status: 400 });
+    } finally {
+      del(blobUrl).catch((e) => console.error("[paprika] failed to delete blob:", e));
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
     const raw: PaprikaRecipe[] = [];
 
     const isZip = buffer[0] === 0x50 && buffer[1] === 0x4b;
