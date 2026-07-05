@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   ShoppingCart, ChevronDown, ChevronRight, Trash2, Plus, X, LayoutList, BookOpen,
 } from "lucide-react";
+import { useGroceryList } from "@/hooks/use-grocery";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,8 +27,6 @@ const CATEGORY_ICONS: Record<GroceryCategory, string> = {
   Condiments: "🧂",
   Other: "📦",
 };
-
-let nextId = 100;
 
 // ─── GroceryItem row ──────────────────────────────────────────────────────────
 
@@ -175,76 +174,31 @@ function RecipeGroupSection({
 type ViewMode = "category" | "recipe";
 
 export default function GroceryPage() {
-  const [items, setItems] = useState<GroceryItemData[]>([]);
-  const [loading, setLoading] = useState(true);
+  const {
+    items: fetchedItems,
+    isLoading: loading,
+    toggleItem: toggleItemApi,
+    addItem: addItemApi,
+    deleteItem,
+    clearChecked,
+  } = useGroceryList();
+  const items: GroceryItemData[] = fetchedItems ?? [];
   const [viewMode, setViewMode] = useState<ViewMode>("category");
   const [newItemName, setNewItemName] = useState("");
   const [addingItem, setAddingItem] = useState(false);
 
-  useEffect(() => {
-    const fetchItems = async () => {
-      try {
-        const res = await fetch("/api/grocery");
-        if (res.ok) {
-          const data = await res.json();
-          setItems(data.items ?? []);
-        }
-      } catch {
-        // stay empty
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchItems();
-  }, []);
-
   function toggleItem(id: string) {
     const item = items.find((i) => i.id === id);
     if (!item) return;
-    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, checked: !i.checked } : i)));
-    fetch(`/api/grocery?id=${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ checked: !item.checked }),
-    }).catch(() => {});
-  }
-
-  function deleteItem(id: string) {
-    setItems((prev) => prev.filter((item) => item.id !== id));
-    fetch(`/api/grocery?id=${id}`, { method: "DELETE" }).catch(() => {});
-  }
-
-  function clearChecked() {
-    const checkedIds = items.filter((i) => i.checked).map((i) => i.id);
-    setItems((prev) => prev.filter((i) => !i.checked));
-    checkedIds.forEach((id) => fetch(`/api/grocery?id=${id}`, { method: "DELETE" }).catch(() => {}));
+    toggleItemApi(id, !item.checked);
   }
 
   async function addItem() {
     if (!newItemName.trim()) return;
-    const tempId = String(nextId++);
-    const newItem: GroceryItemData = {
-      id: tempId,
-      name: newItemName.trim(),
-      category: "Other",
-      checked: false,
-      createdAt: new Date().toISOString(),
-    };
-    setItems((prev) => [...prev, newItem]);
+    const name = newItemName.trim();
     setNewItemName("");
     setAddingItem(false);
-
-    try {
-      const res = await fetch("/api/grocery", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newItem.name }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setItems((prev) => prev.map((i) => (i.id === tempId ? { ...i, id: data.item?.id ?? i.id } : i)));
-      }
-    } catch {}
+    await addItemApi(name);
   }
 
   const totalItems = items.length;

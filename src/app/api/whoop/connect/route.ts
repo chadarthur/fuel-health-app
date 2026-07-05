@@ -18,8 +18,9 @@ export async function GET() {
     );
   }
 
-  // state is required by WHOOP v2 OAuth (min 8 chars, CSRF protection)
-  const state = Math.random().toString(36).substring(2, 12);
+  // state is required by WHOOP v2 OAuth (min 8 chars, CSRF protection).
+  // Stored in an httpOnly cookie so the callback can verify it.
+  const state = crypto.randomUUID().replace(/-/g, "");
 
   const params = new URLSearchParams({
     response_type: "code",
@@ -29,5 +30,13 @@ export async function GET() {
     state,
   });
 
-  return NextResponse.redirect(`${WHOOP_AUTH_URL}?${params.toString()}`);
+  const res = NextResponse.redirect(`${WHOOP_AUTH_URL}?${params.toString()}`);
+  res.cookies.set("whoop_oauth_state", state, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 600,
+    path: "/",
+  });
+  return res;
 }

@@ -24,33 +24,42 @@ export async function GET(req: NextRequest) {
 
     if (period === "week" || period === "month") {
       const days = period === "week" ? 7 : 30;
-      const dailyBreakdown = [];
+      const anchorMs = new Date(`${date}T00:00:00.000Z`).getTime();
+      const dayMs = 24 * 60 * 60 * 1000;
 
-      for (let i = days - 1; i >= 0; i--) {
-        // Step back i days from the anchor date using UTC to avoid DST issues
-        const anchorMs = new Date(`${date}T00:00:00.000Z`).getTime();
-        const dayMs = anchorMs - i * 24 * 60 * 60 * 1000;
-        const d = new Date(dayMs);
-        const dayStr = d.toISOString().split("T")[0];
+      // One query covering the whole range, then bucket meals by local day
+      const firstDayStr = new Date(anchorMs - (days - 1) * dayMs).toISOString().split("T")[0];
+      const { start: rangeStart } = getUtcDayRange(firstDayStr, tzOffset);
+      const { end: rangeEnd } = getUtcDayRange(date, tzOffset);
 
-        const { start, end } = getUtcDayRange(dayStr, tzOffset);
+      const meals = await prisma.mealEntry.findMany({
+        where: { userId, loggedAt: { gte: rangeStart, lte: rangeEnd } },
+        select: { loggedAt: true, calories: true, protein: true, carbs: true, fat: true },
+      });
 
-        const meals = await prisma.mealEntry.findMany({
-          where: { userId, loggedAt: { gte: start, lte: end } },
-        });
-
-        const totals = meals.reduce(
-          (acc, m) => ({
-            calories: acc.calories + m.calories,
-            protein: acc.protein + m.protein,
-            carbs: acc.carbs + m.carbs,
-            fat: acc.fat + m.fat,
-          }),
-          { calories: 0, protein: 0, carbs: 0, fat: 0 }
-        );
-
-        dailyBreakdown.push({ date: dayStr, ...totals });
+      const buckets = new Map<string, { calories: number; protein: number; carbs: number; fat: number }>();
+      for (let i = 0; i < days; i++) {
+        const dayStr = new Date(anchorMs - (days - 1 - i) * dayMs).toISOString().split("T")[0];
+        buckets.set(dayStr, { calories: 0, protein: 0, carbs: 0, fat: 0 });
       }
+
+      for (const m of meals) {
+        // Shift the UTC timestamp back to the user's local day
+        const localDayStr = new Date(m.loggedAt.getTime() - tzOffset * 60 * 1000)
+          .toISOString()
+          .split("T")[0];
+        const bucket = buckets.get(localDayStr);
+        if (!bucket) continue;
+        bucket.calories += m.calories;
+        bucket.protein += m.protein;
+        bucket.carbs += m.carbs;
+        bucket.fat += m.fat;
+      }
+
+      const dailyBreakdown = Array.from(buckets.entries()).map(([dayStr, totals]) => ({
+        date: dayStr,
+        ...totals,
+      }));
 
       return NextResponse.json({ period, date, goals, dailyBreakdown });
     }

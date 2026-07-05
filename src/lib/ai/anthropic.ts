@@ -7,7 +7,19 @@ import type {
   AIContentPart,
 } from "@/types/ai";
 
-const DEFAULT_MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514";
+const DEFAULT_MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
+
+// Sonnet 5 / Opus 4.7+ / Fable reject non-default sampling params (400) and
+// run adaptive thinking by default. This app's calls are deterministic JSON
+// extraction/chat, so omit temperature and disable thinking on those models.
+function modelRejectsSampling(model: string): boolean {
+  return (
+    model.includes("sonnet-5") ||
+    model.includes("opus-4-7") ||
+    model.includes("opus-4-8") ||
+    model.includes("fable")
+  );
+}
 
 function getClient(): Anthropic {
   return new Anthropic({
@@ -117,11 +129,15 @@ export const anthropicProvider: AIProvider = {
   async complete(options: AICompletionOptions): Promise<AICompletionResult> {
     const client = getClient();
     const { system, messages } = mapMessages(options.messages);
+    const model = options.model || DEFAULT_MODEL;
+    const noSampling = modelRejectsSampling(model);
 
     const response = await client.messages.create({
-      model: options.model || DEFAULT_MODEL,
+      model,
       max_tokens: options.maxTokens ?? 4096,
-      temperature: options.temperature ?? 0.7,
+      ...(noSampling
+        ? { thinking: { type: "disabled" as const } }
+        : { temperature: options.temperature ?? 0.7 }),
       ...(system ? { system } : {}),
       messages,
     });
@@ -143,11 +159,15 @@ export const anthropicProvider: AIProvider = {
   async stream(options: AICompletionOptions): Promise<ReadableStream<string>> {
     const client = getClient();
     const { system, messages } = mapMessages(options.messages);
+    const model = options.model || DEFAULT_MODEL;
+    const noSampling = modelRejectsSampling(model);
 
     const stream = client.messages.stream({
-      model: options.model || DEFAULT_MODEL,
+      model,
       max_tokens: options.maxTokens ?? 4096,
-      temperature: options.temperature ?? 0.7,
+      ...(noSampling
+        ? { thinking: { type: "disabled" as const } }
+        : { temperature: options.temperature ?? 0.7 }),
       ...(system ? { system } : {}),
       messages,
     });

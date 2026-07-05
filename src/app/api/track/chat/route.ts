@@ -90,9 +90,6 @@ export async function POST(req: NextRequest) {
     const { messages = [], date, tz = 0 } = body;
     const today = date || new Date().toISOString().split("T")[0];
 
-    console.log("[chat] received messages count:", messages.length);
-    console.log("[chat] last user message:", messages[messages.length - 1]?.content?.slice(0, 100));
-
     const hasApiKey = process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY;
 
     if (!hasApiKey) {

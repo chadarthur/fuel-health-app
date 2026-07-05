@@ -12,6 +12,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const code = searchParams.get("code");
   const error = searchParams.get("error");
+  const state = searchParams.get("state");
 
   const appUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
 
@@ -19,6 +20,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(
       `${appUrl}/settings?whoop=error&reason=${error ?? "no_code"}`
     );
+  }
+
+  const expectedState = req.cookies.get("whoop_oauth_state")?.value;
+  if (!expectedState || state !== expectedState) {
+    return NextResponse.redirect(`${appUrl}/settings?whoop=error&reason=state_mismatch`);
   }
 
   const clientId = process.env.WHOOP_CLIENT_ID?.trim();
@@ -70,7 +76,9 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    return NextResponse.redirect(`${appUrl}/settings?whoop=connected`);
+    const res = NextResponse.redirect(`${appUrl}/settings?whoop=connected`);
+    res.cookies.delete("whoop_oauth_state");
+    return res;
   } catch (err) {
     console.error("WHOOP callback error:", err);
     return NextResponse.redirect(`${appUrl}/settings?whoop=error&reason=server_error`);

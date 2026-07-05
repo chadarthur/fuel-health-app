@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
+import { getHouseholdUserIds } from "@/lib/household";
 
 export async function GET(
   _req: NextRequest,
@@ -11,8 +12,9 @@ export async function GET(
     if (auth.error) return auth.error;
     const { userId } = auth;
 
+    const userIds = await getHouseholdUserIds(userId);
     const recipe = await prisma.savedRecipe.findFirst({
-      where: { id: params.id, userId },
+      where: { id: params.id, userId: { in: userIds } },
     });
 
     if (!recipe) {

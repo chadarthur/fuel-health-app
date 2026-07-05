@@ -84,8 +84,15 @@ export async function PUT(req: NextRequest) {
     const { userId } = auth;
 
     const body = await req.json();
-    const { id, ...data } = body;
+    const { id } = body;
     if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
+
+    const data: Record<string, unknown> = {};
+    const stringFields = ["name", "description", "mealType", "imageUrl", "source"];
+    const numberFields = ["calories", "protein", "carbs", "fat", "fiber", "sugar", "confidence"];
+    for (const f of stringFields) if (typeof body[f] === "string") data[f] = body[f];
+    for (const f of numberFields) if (typeof body[f] === "number") data[f] = body[f];
+    if (body.loggedAt) data.loggedAt = new Date(body.loggedAt);
 
     await prisma.mealEntry.updateMany({ where: { id, userId }, data });
     return NextResponse.json({ success: true });

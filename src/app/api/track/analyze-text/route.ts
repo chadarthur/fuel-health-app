@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAIProvider } from "@/lib/ai/provider";
 import { FOOD_TEXT_ANALYSIS_PROMPT } from "@/lib/ai/prompts";
+import { requireUser } from "@/lib/session";
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = await requireUser();
+    if (auth.error) return auth.error;
+
     const { text } = await req.json();
     if (!text) return NextResponse.json({ error: "Text required" }, { status: 400 });
 

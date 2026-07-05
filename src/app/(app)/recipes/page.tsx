@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import {
   Sparkles, Link2, Loader2, CheckCircle, BookOpen,
-  ChevronRight, Flame, Dumbbell, Clock, Users, X,
+  ChevronRight, Flame, Dumbbell, Clock, Users, X, Instagram,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,7 +25,7 @@ interface RecipePreview {
   image?: string;
 }
 
-type Tab = "ai" | "url";
+type Tab = "ai" | "url" | "instagram";
 
 const DIETARY_OPTIONS = ["Gluten Free", "Keto", "Vegan", "Vegetarian", "Dairy Free", "Paleo", "High Protein"];
 
@@ -436,6 +436,175 @@ function URLImportTab() {
   );
 }
 
+// ─── Instagram Import Tab ─────────────────────────────────────────────────────
+
+function InstagramImportTab() {
+  const [url, setUrl] = useState("");
+  const [caption, setCaption] = useState("");
+  const [showCaption, setShowCaption] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [recipe, setRecipe] = useState<RecipePreview | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+
+  const canImport = showCaption ? caption.trim().length > 20 : url.trim().length > 0;
+
+  async function importRecipe() {
+    if (!canImport || loading) return;
+    setLoading(true);
+    setRecipe(null);
+    setError("");
+    setSaved(false);
+
+    try {
+      const payload = showCaption
+        ? { caption: caption.trim(), url: url.trim() || undefined }
+        : { url: url.trim() };
+      const res = await fetch("/api/recipes/import-instagram", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        setError(data.error || "Failed to import. Try pasting the caption instead.");
+        if (data.needsCaption) setShowCaption(true);
+        return;
+      }
+
+      setRecipe(data.recipe as RecipePreview);
+    } catch {
+      setError("Something went wrong. Try pasting the caption text instead.");
+      setShowCaption(true);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function saveRecipe() {
+    if (!recipe || saved) return;
+    setSaving(true);
+    try {
+      await fetch("/api/recipes/saved", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...recipe,
+          isAiGenerated: false,
+          sourceUrl: (recipe as RecipePreview & { sourceUrl?: string }).sourceUrl ?? (url.trim() || undefined),
+        }),
+      });
+      setSaved(true);
+    } catch {
+      setError("Failed to save recipe.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="p-3 rounded-xl bg-muted/50 dark:bg-white/5 border border-border dark:border-white/5">
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Paste the link to an Instagram reel or post with a recipe in the caption.
+          If Instagram blocks the lookup, copy the caption and paste the text instead.
+        </p>
+      </div>
+
+      {/* URL input */}
+      <div>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">
+          Instagram post URL
+        </p>
+        <div className="relative">
+          <Instagram size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://www.instagram.com/reel/..."
+            className="w-full bg-card border border-border dark:border-white/5 rounded-xl pl-9 pr-9 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#E1306C]/30"
+            onKeyDown={(e) => { if (e.key === "Enter") importRecipe(); }}
+          />
+          {url && (
+            <button
+              onClick={() => { setUrl(""); setRecipe(null); setError(""); }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Caption fallback */}
+      {showCaption ? (
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">
+            Caption text
+          </p>
+          <textarea
+            value={caption}
+            onChange={(e) => setCaption(e.target.value)}
+            placeholder="Paste the full caption here — ingredients, steps, everything..."
+            rows={6}
+            className="w-full bg-card border border-border dark:border-white/5 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-[#E1306C]/30"
+          />
+        </div>
+      ) : (
+        <button
+          onClick={() => setShowCaption(true)}
+          className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors text-center"
+        >
+          Or paste the caption text instead →
+        </button>
+      )}
+
+      {/* Import button */}
+      <Button
+        onClick={importRecipe}
+        disabled={!canImport || loading}
+        className="w-full bg-gradient-to-r from-[#833AB4] via-[#E1306C] to-[#F77737] text-white font-semibold gap-2"
+      >
+        {loading ? (
+          <>
+            <Loader2 size={15} className="animate-spin" />
+            Extracting recipe...
+          </>
+        ) : (
+          <>
+            <Instagram size={15} />
+            Import from Instagram
+          </>
+        )}
+      </Button>
+
+      {error && <p className="text-xs text-[#FF6B6B] text-center">{error}</p>}
+
+      {recipe && (
+        <RecipePreviewCard
+          recipe={recipe}
+          onSave={saveRecipe}
+          saving={saving}
+          saved={saved}
+        />
+      )}
+
+      {saved && (
+        <button
+          onClick={() => { setRecipe(null); setSaved(false); setUrl(""); setCaption(""); }}
+          className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors py-2"
+        >
+          Import another recipe →
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function RecipesPage() {
@@ -502,14 +671,28 @@ export default function RecipesPage() {
             )}
           >
             <Link2 size={14} className={activeTab === "url" ? "text-[#00D4AA]" : ""} />
-            Import URL
+            URL
+          </button>
+          <button
+            onClick={() => setActiveTab("instagram")}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all",
+              activeTab === "instagram"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Instagram size={14} className={activeTab === "instagram" ? "text-[#E1306C]" : ""} />
+            Instagram
           </button>
         </div>
       </div>
 
       {/* Tab content */}
       <div className="px-4">
-        {activeTab === "ai" ? <AIGenerateTab /> : <URLImportTab />}
+        {activeTab === "ai" && <AIGenerateTab />}
+        {activeTab === "url" && <URLImportTab />}
+        {activeTab === "instagram" && <InstagramImportTab />}
       </div>
 
       {/* Macro legend at bottom */}

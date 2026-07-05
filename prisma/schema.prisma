@@ -15,18 +15,61 @@ model User {
   emailVerified DateTime?
   image         String?
   password      String?
+  simpleMode    Boolean   @default(false)
+  householdId   String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts     Account[]
-  sessions     Session[]
-  savedRecipes SavedRecipe[]
-  groceryItems GroceryItem[]
-  mealEntries  MealEntry[]
-  macroGoals   MacroGoal?
-  whoopData    WhoopDailyData[]
-  whoopToken   WhoopToken?
-  chatSessions ChatSession[]
+  accounts            Account[]
+  sessions            Session[]
+  savedRecipes        SavedRecipe[]
+  groceryItems        GroceryItem[]
+  mealEntries         MealEntry[]
+  macroGoals          MacroGoal?
+  whoopData           WhoopDailyData[]
+  whoopToken          WhoopToken?
+  chatSessions        ChatSession[]
+  household           Household?           @relation(fields: [householdId], references: [id], onDelete: SetNull)
+  passwordResetTokens PasswordResetToken[]
+  sentInvites         HouseholdInvite[]    @relation("SentInvites")
+
+  @@index([householdId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Household {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  members User[]
+  invites HouseholdInvite[]
+}
+
+model HouseholdInvite {
+  id           String   @id @default(cuid())
+  householdId  String?
+  invitedById  String
+  invitedEmail String
+  status       String   @default("pending") // pending | accepted | declined
+  createdAt    DateTime @default(now())
+
+  household Household? @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  invitedBy User       @relation("SentInvites", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([invitedEmail])
+  @@index([invitedById])
 }
 
 model Account {

@@ -154,6 +154,43 @@ You: "You still need about 80g protein for the day — here are some options tha
 <recipe_suggestion>{"name":"Grilled Salmon with Quinoa","calories":580,"protein":52,"carbs":40,"fat":18,"fromSaved":false,"recipeId":null,"reason":"Covers ~65% of your remaining protein gap with healthy fats"}</recipe_suggestion>
 <recipe_suggestion>{"name":"Greek Chicken Bowl","calories":620,"protein":58,"carbs":45,"fat":16,"fromSaved":false,"recipeId":null,"reason":"High protein, fits perfectly in your remaining calories"}</recipe_suggestion>"`;
 
+export const INSTAGRAM_CAPTION_IMPORT_PROMPT = `You are a recipe extraction specialist. You will be given the caption of an Instagram post or reel (often a cooking video). Your job is to extract the recipe from it.
+
+Instagram captions are informal: ingredients may be listed with emojis or dashes, instructions may be loose or abbreviated, and hashtags/credits/promo text should be ignored. Reconstruct a clean, usable recipe. If amounts are missing, estimate sensible amounts from context. If the caption only shows ingredients, write reasonable step-by-step instructions for how the dish is typically made.
+
+Return ONLY valid JSON in exactly this format:
+{
+  "title": "Recipe Name",
+  "description": "Brief appetizing description (2-3 sentences)",
+  "readyInMinutes": 30,
+  "servings": 4,
+  "cuisines": ["Italian"],
+  "diets": [],
+  "ingredients": [
+    {
+      "name": "chicken breast",
+      "amount": 500,
+      "unit": "g",
+      "original": "500g boneless chicken breast"
+    }
+  ],
+  "instructions": "1. Preheat oven to 400°F...\\n2. Season the chicken...",
+  "nutrition": {
+    "calories": 420,
+    "protein": 38,
+    "carbs": 22,
+    "fat": 18,
+    "fiber": 4,
+    "sugar": 6
+  }
+}
+
+Rules:
+- nutrition values are PER SERVING — estimate from the ingredients using your nutrition knowledge
+- instructions should be numbered steps, newline-separated
+- Ignore hashtags, @mentions, follow/like requests, and unrelated text
+- If there is genuinely no recipe in the caption, return: {"error": "No recipe found in this caption"}`;
+
 export const RECIPE_URL_IMPORT_PROMPT = `You are a recipe extraction specialist. You will be given the text content of a webpage. Your job is to find and extract the recipe from it.
 
 Return ONLY valid JSON in exactly this format:

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 import {
   LayoutDashboard,
   ChefHat,
@@ -11,7 +12,8 @@ import {
   Settings,
   type LucideIcon,
 } from "lucide-react";
-import { NAV_ITEMS } from "@/lib/constants";
+import { NAV_ITEMS, SIMPLE_NAV_HREFS } from "@/lib/constants";
+import { usePreferences } from "@/hooks/use-preferences";
 import { cn } from "@/lib/utils";
 
 const iconMap: Record<string, LucideIcon> = {
@@ -24,6 +26,15 @@ const iconMap: Record<string, LucideIcon> = {
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const userName =
+    session?.user?.name ?? session?.user?.email?.split("@")[0] ?? "User";
+  const userEmail = session?.user?.email ?? "";
+  const userInitial = userName.charAt(0).toUpperCase();
+  const { simpleMode } = usePreferences();
+  const navItems = simpleMode
+    ? NAV_ITEMS.filter((item) => (SIMPLE_NAV_HREFS as readonly string[]).includes(item.href))
+    : NAV_ITEMS;
 
   return (
     <aside
@@ -46,7 +57,7 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-2 space-y-1">
-        {NAV_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const Icon = iconMap[item.icon];
           const isActive =
             pathname === item.href || pathname.startsWith(item.href + "/");
@@ -107,11 +118,13 @@ export function Sidebar() {
         {/* User avatar */}
         <div className="flex items-center gap-3 px-3 py-2.5">
           <div className="h-8 w-8 rounded-full bg-gradient-teal flex items-center justify-center">
-            <span className="text-xs font-bold text-white">U</span>
+            <span className="text-xs font-bold text-white">{userInitial}</span>
           </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-medium text-foreground">User</span>
-            <span className="text-xs text-muted-foreground">Free Plan</span>
+          <div className="flex flex-col min-w-0">
+            <span className="text-sm font-medium text-foreground truncate">{userName}</span>
+            {userEmail && (
+              <span className="text-xs text-muted-foreground truncate">{userEmail}</span>
+            )}
           </div>
         </div>
       </div>

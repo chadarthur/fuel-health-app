@@ -1,11 +1,14 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import Link from "next/link";
 import { Camera, PenLine, MessageCircle, Search } from "lucide-react";
 import { MealType } from "@/lib/constants";
+import { usePreferences } from "@/hooks/use-preferences";
 
 // ─── Fetcher ──────────────────────────────────────────────────────────────────
 
@@ -176,6 +179,14 @@ const sourceBadgeColors: Record<string, string> = {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
+  const router = useRouter();
+  const { simpleMode, isLoading: prefsLoading } = usePreferences();
+
+  // Recipe Book mode: the app is just recipes + grocery, so skip the macro dashboard
+  useEffect(() => {
+    if (!prefsLoading && simpleMode) router.replace("/recipes/saved");
+  }, [prefsLoading, simpleMode, router]);
+
   const today = getToday();
   const { startDate, endDate } = getDateRange(7);
 

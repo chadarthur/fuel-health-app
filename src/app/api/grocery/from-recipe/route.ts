@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { categorizeIngredient } from "@/lib/grocery-utils";
 import type { RecipeIngredient } from "@/types/recipe";
 import { requireUser } from "@/lib/session";
+import { getHouseholdUserIds } from "@/lib/household";
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,8 +14,9 @@ export async function POST(req: NextRequest) {
     const { recipeId } = await req.json();
     if (!recipeId) return NextResponse.json({ error: "recipeId required" }, { status: 400 });
 
+    const userIds = await getHouseholdUserIds(userId);
     const recipe = await prisma.savedRecipe.findFirst({
-      where: { id: recipeId, userId },
+      where: { id: recipeId, userId: { in: userIds } },
     });
     if (!recipe) return NextResponse.json({ error: "Recipe not found" }, { status: 404 });
 
@@ -28,7 +30,7 @@ export async function POST(req: NextRequest) {
       const category = categorizeIngredient(name);
 
       const existing = await prisma.groceryItem.findFirst({
-        where: { userId, name: { equals: name }, checked: false },
+        where: { userId: { in: userIds }, name: { equals: name }, checked: false },
       });
 
       if (existing) {

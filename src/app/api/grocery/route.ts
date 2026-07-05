@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { categorizeIngredient } from "@/lib/grocery-utils";
 import { requireUser } from "@/lib/session";
+import { getHouseholdUserIds } from "@/lib/household";
 
 export async function GET() {
   try {
@@ -9,8 +10,10 @@ export async function GET() {
     if (auth.error) return auth.error;
     const { userId } = auth;
 
+    // The grocery list is shared across the household
+    const userIds = await getHouseholdUserIds(userId);
     const items = await prisma.groceryItem.findMany({
-      where: { userId },
+      where: { userId: { in: userIds } },
       orderBy: [{ category: "asc" }, { createdAt: "asc" }],
     });
     return NextResponse.json(
@@ -58,11 +61,20 @@ export async function PATCH(req: NextRequest) {
     const { userId } = auth;
 
     const body = await req.json();
-    const { id, ...updates } = body;
+    // Accept the id from the body or the query string (the page sends it as ?id=)
+    const id = body.id ?? new URL(req.url).searchParams.get("id");
     if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
 
+    const updates: { name?: string; quantity?: number | null; unit?: string | null; category?: string; checked?: boolean } = {};
+    if (typeof body.name === "string") updates.name = body.name;
+    if (typeof body.quantity === "number" || body.quantity === null) updates.quantity = body.quantity;
+    if (typeof body.unit === "string" || body.unit === null) updates.unit = body.unit;
+    if (typeof body.category === "string") updates.category = body.category;
+    if (typeof body.checked === "boolean") updates.checked = body.checked;
+
+    const userIds = await getHouseholdUserIds(userId);
     const item = await prisma.groceryItem.updateMany({
-      where: { id, userId },
+      where: { id, userId: { in: userIds } },
       data: updates,
     });
     return NextResponse.json(item);
@@ -80,15 +92,18 @@ export async function DELETE(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
+    const userIds = await getHouseholdUserIds(userId);
 
     if (id) {
-      await prisma.groceryItem.deleteMany({ where: { id, userId } });
+      await prisma.groceryItem.deleteMany({ where: { id, userId: { in: userIds } } });
       return NextResponse.json({ success: true });
     }
 
     const body = await req.json().catch(() => ({}));
     if (body.clearChecked) {
-      await prisma.groceryItem.deleteMany({ where: { userId, checked: true } });
+      await prisma.groceryItem.deleteMany({
+        where: { userId: { in: userIds }, checked: true },
+      });
       return NextResponse.json({ success: true });
     }
 

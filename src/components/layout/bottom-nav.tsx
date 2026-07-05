@@ -11,6 +11,7 @@ import {
   Cog,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { usePreferences } from "@/hooks/use-preferences";
 
 const NAV = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -21,8 +22,14 @@ const NAV = [
   { label: "Settings",  href: "/settings",  icon: Cog },
 ];
 
+const SIMPLE_NAV = NAV.filter((n) =>
+  ["/recipes", "/grocery", "/settings"].includes(n.href)
+);
+
 export function BottomNav() {
   const pathname = usePathname();
+  const { simpleMode } = usePreferences();
+  const nav = simpleMode ? SIMPLE_NAV : NAV;
 
   return (
     <nav
@@ -33,7 +40,7 @@ export function BottomNav() {
       )}
     >
       <div className="flex h-16 items-center justify-around px-1 pb-safe">
-        {NAV.map(({ label, href, icon: Icon }) => {
+        {nav.map(({ label, href, icon: Icon }) => {
           const isActive =
             pathname === href || pathname.startsWith(href + "/");
 
@@ -45,19 +52,16 @@ export function BottomNav() {
                 "relative flex flex-col items-center justify-center gap-0.5",
                 "flex-1 py-1.5 rounded-xl",
                 "transition-all duration-200 tap-scale",
-                isActive
-                  ? "text-transparent"
-                  : "text-muted-foreground hover:text-foreground"
+                !isActive && "text-muted-foreground hover:text-foreground"
               )}
             >
-              <div className="relative">
-                {isActive ? (
-                  <div className="bg-gradient-coral rounded-lg p-0.5">
-                    <Icon className="h-5 w-5 absolute inset-0.5 text-white" />
-                  </div>
-                ) : (
-                  <Icon className="h-5 w-5" />
+              <div
+                className={cn(
+                  "flex h-7 w-7 items-center justify-center rounded-lg",
+                  isActive && "bg-gradient-coral"
                 )}
+              >
+                <Icon className={cn("h-5 w-5", isActive && "text-white")} />
               </div>
 
               <span

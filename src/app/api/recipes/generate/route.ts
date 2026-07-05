@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAIProvider } from "@/lib/ai/provider";
 import { RECIPE_GENERATION_PROMPT } from "@/lib/ai/prompts";
+import { requireUser } from "@/lib/session";
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = await requireUser();
+    if (auth.error) return auth.error;
+
     const body = await req.json();
     const { prompt, dietary = [], servings = 4 } = body;
 

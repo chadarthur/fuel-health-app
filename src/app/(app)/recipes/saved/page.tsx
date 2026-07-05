@@ -10,6 +10,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { SavedRecipeData } from "@/types/recipe";
 
+type SharedRecipe = SavedRecipeData & { isOwn?: boolean; ownerName?: string };
+
 const PLACEHOLDER_IMAGE = "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&q=80";
 
 type FilterTab = "all" | "imported" | "ai";
@@ -30,7 +32,7 @@ function RecipeCardSkeleton() {
 }
 
 interface SavedRecipeCardProps {
-  recipe: SavedRecipeData;
+  recipe: SharedRecipe;
   onAddToGrocery: (recipeId: string) => void;
   groceryAdded: boolean;
   groceryLoading: boolean;
@@ -59,6 +61,11 @@ function SavedRecipeCard({ recipe, onAddToGrocery, groceryAdded, groceryLoading 
               <div className="absolute top-2 left-2 flex items-center gap-1 bg-gradient-to-r from-[#FF6B6B] to-[#00D4AA] text-white text-[10px] font-bold px-2 py-1 rounded-full">
                 <Sparkles size={9} />
                 AI
+              </div>
+            )}
+            {recipe.isOwn === false && (
+              <div className="absolute bottom-2 left-2 bg-[#54A0FF]/90 text-white text-[10px] font-bold px-2 py-1 rounded-full">
+                {recipe.ownerName}&apos;s
               </div>
             )}
           </div>
@@ -112,7 +119,7 @@ function SavedRecipeCard({ recipe, onAddToGrocery, groceryAdded, groceryLoading 
 
 export default function SavedRecipesPage() {
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
-  const [recipes, setRecipes] = useState<SavedRecipeData[]>([]);
+  const [recipes, setRecipes] = useState<SharedRecipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [groceryLoadingIds, setGroceryLoadingIds] = useState<Set<string>>(new Set());
   const [groceryAddedIds, setGroceryAddedIds] = useState<Set<string>>(new Set());

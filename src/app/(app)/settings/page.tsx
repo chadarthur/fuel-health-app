@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
+import useSWR from "swr";
 import {
   Target,
   Activity,
@@ -18,11 +19,21 @@ import {
   Unlink,
   Loader2,
   LogOut,
+  Users,
+  UserPlus,
+  Upload,
+  BookOpen,
+  X,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
+import { usePreferences } from "@/hooks/use-preferences";
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 import {
   Dialog,
   DialogContent,
@@ -244,13 +255,271 @@ function WhoopSection() {
   );
 }
 
+// ─── Sharing Section ──────────────────────────────────────────────────────────
+
+interface HouseholdStatus {
+  household: { id: string; members: { id: string; name: string | null; email: string | null }[] } | null;
+  incoming: { id: string; from: string; createdAt: string }[];
+  outgoing: { id: string; email: string; createdAt: string }[];
+}
+
+function SharingSection({ currentUserEmail }: { currentUserEmail: string }) {
+  const { data, mutate, isLoading } = useSWR<HouseholdStatus>("/api/household", fetcher);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
+
+  useEffect(() => {
+    if (!message) return;
+    const t = setTimeout(() => setMessage(null), 4000);
+    return () => clearTimeout(t);
+  }, [message]);
+
+  const partner = data?.household?.members.find(
+    (m) => m.email?.toLowerCase() !== currentUserEmail.toLowerCase()
+  );
+
+  async function sendInvite() {
+    if (!inviteEmail.trim() || busy) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/household", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: inviteEmail.trim() }),
+      });
+      const d = await res.json();
+      if (!res.ok) {
+        setMessage({ text: d.error || "Failed to send invite", error: true });
+      } else {
+        setMessage({ text: "Invite sent!", error: false });
+        setInviteEmail("");
+        mutate();
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function respond(inviteId: string, action: "accept" | "decline") {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/household/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inviteId, action }),
+      });
+      const d = await res.json();
+      if (!res.ok) setMessage({ text: d.error || "Failed", error: true });
+      else if (action === "accept") setMessage({ text: "You're now sharing recipes & groceries!", error: false });
+      mutate();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function cancelInvite(inviteId: string) {
+    setBusy(true);
+    try {
+      await fetch(`/api/household?inviteId=${inviteId}`, { method: "DELETE" });
+      mutate();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function leave() {
+    setBusy(true);
+    try {
+      await fetch("/api/household", { method: "DELETE" });
+      setMessage({ text: "You've stopped sharing.", error: false });
+      mutate();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section>
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2 px-1">
+        Sharing
+      </p>
+      <Card glass className="overflow-hidden">
+        <CardContent className="px-4 py-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <div
+              className={cn(
+                "w-9 h-9 rounded-xl flex items-center justify-center shrink-0",
+                partner ? "bg-[#54A0FF]/15" : "bg-muted"
+              )}
+            >
+              <Users size={16} className={partner ? "text-[#54A0FF]" : "text-muted-foreground"} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold">Share recipes &amp; grocery list</p>
+              <p className="text-xs text-muted-foreground">
+                {isLoading
+                  ? "Loading…"
+                  : partner
+                    ? `Sharing with ${partner.name || partner.email}`
+                    : "Invite one person to share your recipe book and grocery list"}
+              </p>
+            </div>
+          </div>
+
+          {partner ? (
+            <Button
+              variant="outline"
+              className="w-full gap-2 text-[#FF6B6B] border-[#FF6B6B]/30 hover:bg-[#FF6B6B]/10 hover:text-[#FF6B6B]"
+              onClick={leave}
+              disabled={busy}
+            >
+              {busy ? <Loader2 size={14} className="animate-spin" /> : <Unlink size={14} />}
+              Stop Sharing
+            </Button>
+          ) : (
+            <>
+              <div className="flex gap-2">
+                <Input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") sendInvite(); }}
+                  placeholder="partner@example.com"
+                  className="flex-1"
+                />
+                <Button
+                  onClick={sendInvite}
+                  disabled={busy || !inviteEmail.trim()}
+                  className="gap-1.5 bg-[#54A0FF] hover:bg-[#54A0FF]/90 text-white font-semibold shrink-0"
+                >
+                  {busy ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
+                  Invite
+                </Button>
+              </div>
+
+              {data?.incoming?.map((inv) => (
+                <div key={inv.id} className="flex items-center gap-2 p-3 rounded-xl bg-[#54A0FF]/10">
+                  <p className="text-xs flex-1">
+                    <span className="font-semibold">{inv.from}</span> invited you to share
+                  </p>
+                  <Button
+                    size="sm"
+                    className="h-7 px-3 text-xs bg-[#00D4AA] hover:bg-[#00D4AA]/90 text-black font-semibold"
+                    onClick={() => respond(inv.id, "accept")}
+                    disabled={busy}
+                  >
+                    Accept
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => respond(inv.id, "decline")}
+                    disabled={busy}
+                  >
+                    Decline
+                  </Button>
+                </div>
+              ))}
+
+              {data?.outgoing?.map((inv) => (
+                <div key={inv.id} className="flex items-center gap-2 p-3 rounded-xl bg-muted/50 dark:bg-white/5">
+                  <p className="text-xs flex-1 text-muted-foreground">
+                    Invite pending: <span className="font-semibold text-foreground">{inv.email}</span>
+                  </p>
+                  <button
+                    onClick={() => cancelInvite(inv.id)}
+                    disabled={busy}
+                    className="text-muted-foreground hover:text-[#FF6B6B]"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+            </>
+          )}
+
+          {message && (
+            <p className={cn("text-xs text-center font-medium", message.error ? "text-[#FF6B6B]" : "text-[#00D4AA]")}>
+              {message.text}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    </section>
+  );
+}
+
+// ─── Paprika Import Row ───────────────────────────────────────────────────────
+
+function PaprikaImportRow() {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    setResult(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/recipes/import-paprika", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setResult(data.error || "Import failed");
+      } else {
+        setResult(
+          `Imported ${data.imported} recipe${data.imported !== 1 ? "s" : ""}` +
+            (data.skipped ? ` (${data.skipped} already existed)` : "")
+        );
+      }
+    } catch {
+      setResult("Import failed");
+    } finally {
+      setImporting(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  return (
+    <>
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".paprikarecipes,.paprikarecipe"
+        className="hidden"
+        onChange={handleFile}
+      />
+      <SettingRow
+        icon={importing ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+        label={importing ? "Importing…" : "Import from Paprika"}
+        value={result ?? "Upload a .paprikarecipes export file"}
+        onClick={() => !importing && fileRef.current?.click()}
+      />
+    </>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const { data: session } = useSession();
+  const { simpleMode, setSimpleMode } = usePreferences();
   const [showClearDialog, setShowClearDialog] = useState(false);
   const [exportDone, setExportDone] = useState(false);
+  const [clearing, setClearing] = useState(false);
+
+  const { data: goalsData } = useSWR<{ calories: number; protein: number; carbs: number; fat: number }>(
+    "/api/track/settings",
+    fetcher
+  );
 
   const userName = session?.user?.name ?? session?.user?.email?.split("@")[0] ?? "User";
   const userEmail = session?.user?.email ?? "";
@@ -267,27 +536,56 @@ export default function SettingsPage() {
     { value: "system", label: "System", icon: <Monitor size={15} /> },
   ];
 
-  function handleExportCSV() {
-    const rows = [
-      ["Date", "Meal", "Calories", "Protein (g)", "Carbs (g)", "Fat (g)"],
-      ["2025-01-20", "Greek Yogurt Parfait", "380", "28", "46", "8"],
-      ["2025-01-20", "Grilled Chicken & Quinoa Bowl", "620", "48", "72", "18"],
-      ["2025-01-20", "Protein Shake", "240", "30", "24", "4"],
-    ];
-    const csv = rows.map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "health-data.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-    setExportDone(true);
-    setTimeout(() => setExportDone(false), 3000);
+  async function handleExportCSV() {
+    try {
+      const res = await fetch("/api/track/meals");
+      if (!res.ok) return;
+      const meals: {
+        loggedAt: string;
+        name: string;
+        mealType: string;
+        calories: number;
+        protein: number;
+        carbs: number;
+        fat: number;
+      }[] = await res.json();
+
+      const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+      const rows = [
+        ["Date", "Meal", "Type", "Calories", "Protein (g)", "Carbs (g)", "Fat (g)"],
+        ...meals.map((m) => [
+          m.loggedAt.split("T")[0],
+          escape(m.name),
+          m.mealType,
+          String(Math.round(m.calories)),
+          String(Math.round(m.protein)),
+          String(Math.round(m.carbs)),
+          String(Math.round(m.fat)),
+        ]),
+      ];
+      const csv = rows.map((r) => r.join(",")).join("\n");
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "fuel-nutrition-history.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+      setExportDone(true);
+      setTimeout(() => setExportDone(false), 3000);
+    } catch {
+      // leave button state unchanged on failure
+    }
   }
 
-  function handleClearData() {
-    setShowClearDialog(false);
+  async function handleClearData() {
+    setClearing(true);
+    try {
+      await fetch("/api/user/data", { method: "DELETE" });
+    } finally {
+      setClearing(false);
+      setShowClearDialog(false);
+    }
   }
 
   return (
@@ -336,25 +634,57 @@ export default function SettingsPage() {
           </Card>
         </section>
 
-        {/* ── Macro Goals ── */}
+        {/* ── App Mode ── */}
         <section>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2 px-1">
-            Nutrition
+            App Mode
           </p>
           <Card glass className="overflow-hidden">
             <SettingRow
-              icon={<Target size={16} />}
-              label="Macro Goals"
-              value="2000 kcal · 150g protein · 250g carbs · 65g fat"
-              href="/settings/goals"
+              icon={<BookOpen size={16} />}
+              label="Recipe Book Mode"
+              value="Just recipes & grocery list — hides all macro tracking"
+              iconBg={simpleMode ? "bg-[#00D4AA]/15" : undefined}
+              rightElement={
+                <Switch
+                  checked={simpleMode}
+                  onCheckedChange={(checked) => setSimpleMode(checked)}
+                />
+              }
             />
           </Card>
         </section>
 
+        {/* ── Sharing ── */}
+        <SharingSection currentUserEmail={userEmail} />
+
+        {/* ── Macro Goals ── */}
+        {!simpleMode && (
+          <section>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2 px-1">
+              Nutrition
+            </p>
+            <Card glass className="overflow-hidden">
+              <SettingRow
+                icon={<Target size={16} />}
+                label="Macro Goals"
+                value={
+                  goalsData
+                    ? `${Math.round(goalsData.calories)} kcal · ${Math.round(goalsData.protein)}g protein · ${Math.round(goalsData.carbs)}g carbs · ${Math.round(goalsData.fat)}g fat`
+                    : "Loading…"
+                }
+                href="/settings/goals"
+              />
+            </Card>
+          </section>
+        )}
+
         {/* ── Whoop Integration ── */}
-        <Suspense fallback={null}>
-          <WhoopSection />
-        </Suspense>
+        {!simpleMode && (
+          <Suspense fallback={null}>
+            <WhoopSection />
+          </Suspense>
+        )}
 
         {/* ── Appearance / Theme ── */}
         <section>
@@ -399,6 +729,7 @@ export default function SettingsPage() {
             Data &amp; Privacy
           </p>
           <Card glass className="overflow-hidden divide-y divide-border dark:divide-white/5">
+            <PaprikaImportRow />
             <SettingRow
               icon={<Download size={16} />}
               label={exportDone ? "Exported!" : "Export as CSV"}
@@ -439,7 +770,7 @@ export default function SettingsPage() {
         <div className="text-center pt-2 pb-4">
           <p className="text-xs text-muted-foreground">Health Super App</p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Version 1.0.0 · Built with Next.js 15
+            Version 1.1.0 · Built with Next.js
           </p>
         </div>
       </div>
@@ -462,9 +793,10 @@ export default function SettingsPage() {
             </DialogClose>
             <Button
               onClick={handleClearData}
+              disabled={clearing}
               className="flex-1 bg-[#FF6B6B] hover:bg-[#FF6B6B]/90 text-white"
             >
-              Clear All
+              {clearing ? <Loader2 size={14} className="animate-spin" /> : "Clear All"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
+import { getHouseholdUserIds } from "@/lib/household";
 
 export async function GET() {
   try {
@@ -8,19 +9,24 @@ export async function GET() {
     if (auth.error) return auth.error;
     const { userId } = auth;
 
+    // Includes household members' recipes when sharing is set up
+    const userIds = await getHouseholdUserIds(userId);
     const recipes = await prisma.savedRecipe.findMany({
-      where: { userId },
+      where: { userId: { in: userIds } },
       orderBy: { createdAt: "desc" },
+      include: { user: { select: { name: true, email: true } } },
     });
 
     return NextResponse.json(
-      recipes.map((r) => ({
+      recipes.map(({ user, ...r }) => ({
         ...r,
         ingredients: JSON.parse(r.ingredients || "[]"),
         nutrition: JSON.parse(r.nutrition || "{}"),
         cuisines: r.cuisines ? JSON.parse(r.cuisines) : [],
         diets: r.diets ? JSON.parse(r.diets) : [],
         createdAt: r.createdAt.toISOString(),
+        isOwn: r.userId === userId,
+        ownerName: user.name || user.email?.split("@")[0] || "Partner",
       }))
     );
   } catch (err) {
