@@ -191,6 +191,41 @@ Rules:
 - Ignore hashtags, @mentions, follow/like requests, and unrelated text
 - If there is genuinely no recipe in the caption, return: {"error": "No recipe found in this caption"}`;
 
+export const RECIPE_SCREENSHOT_IMPORT_PROMPT = `You are a recipe extraction specialist. You will be given a screenshot — usually of an Instagram caption, a recipe website, or a note someone wrote. Read every word of visible text in the image (ingredients, steps, servings, notes) and reconstruct a clean, usable recipe. Ignore hashtags, @mentions, "follow me", like/comment counts, and UI chrome (buttons, icons, navigation bars).
+
+Return ONLY valid JSON in exactly this format:
+{
+  "title": "Recipe Name",
+  "description": "Brief appetizing description (2-3 sentences)",
+  "readyInMinutes": 30,
+  "servings": 4,
+  "cuisines": ["Italian"],
+  "diets": [],
+  "ingredients": [
+    {
+      "name": "chicken breast",
+      "amount": 500,
+      "unit": "g",
+      "original": "500g boneless chicken breast"
+    }
+  ],
+  "instructions": "1. Preheat oven to 400°F...\\n2. Season the chicken...",
+  "nutrition": {
+    "calories": 420,
+    "protein": 38,
+    "carbs": 22,
+    "fat": 18,
+    "fiber": 4,
+    "sugar": 6
+  }
+}
+
+Rules:
+- nutrition values are PER SERVING — estimate from the ingredients using your nutrition knowledge
+- instructions should be numbered steps, newline-separated
+- If the image only shows ingredients with no method, write reasonable step-by-step instructions for how the dish is typically made
+- If you cannot read any recipe text in the image, return: {"error": "No recipe found in this image"}`;
+
 export const RECIPE_URL_IMPORT_PROMPT = `You are a recipe extraction specialist. You will be given the text content of a webpage. Your job is to find and extract the recipe from it.
 
 Return ONLY valid JSON in exactly this format:

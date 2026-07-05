@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import {
   Sparkles, Link2, Loader2, CheckCircle, BookOpen,
-  ChevronRight, Flame, Dumbbell, Clock, Users, X, Instagram,
+  ChevronRight, Flame, Dumbbell, Clock, Users, X, Instagram, Camera,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -447,6 +447,7 @@ function InstagramImportTab() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const canImport = showCaption ? caption.trim().length > 20 : url.trim().length > 0;
 
@@ -470,15 +471,43 @@ function InstagramImportTab() {
       const data = await res.json();
 
       if (!res.ok || data.error) {
-        setError(data.error || "Failed to import. Try pasting the caption instead.");
+        setError(data.error || "Failed to import. Try a screenshot instead.");
         if (data.needsCaption) setShowCaption(true);
         return;
       }
 
       setRecipe(data.recipe as RecipePreview);
     } catch {
-      setError("Something went wrong. Try pasting the caption text instead.");
+      setError("Something went wrong. Try a screenshot instead.");
       setShowCaption(true);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function importFromScreenshot(file: File) {
+    setLoading(true);
+    setRecipe(null);
+    setError("");
+    setSaved(false);
+
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+      const res = await fetch("/api/recipes/import-instagram", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        setError(data.error || "Couldn't read a recipe from that screenshot.");
+        return;
+      }
+
+      setRecipe(data.recipe as RecipePreview);
+    } catch {
+      setError("Something went wrong reading the screenshot.");
     } finally {
       setLoading(false);
     }
@@ -510,8 +539,37 @@ function InstagramImportTab() {
       <div className="p-3 rounded-xl bg-muted/50 dark:bg-white/5 border border-border dark:border-white/5">
         <p className="text-xs text-muted-foreground leading-relaxed">
           Paste the link to an Instagram reel or post with a recipe in the caption.
-          If Instagram blocks the lookup, copy the caption and paste the text instead.
+          If Instagram blocks the lookup — or you can&apos;t select the caption text on your phone —
+          take a screenshot of the caption and upload it below instead.
         </p>
+      </div>
+
+      {/* Screenshot upload — works even when Instagram won't let you select/copy caption text */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) importFromScreenshot(file);
+          e.target.value = "";
+        }}
+      />
+      <Button
+        onClick={() => fileInputRef.current?.click()}
+        disabled={loading}
+        variant="outline"
+        className="w-full gap-2 font-semibold"
+      >
+        <Camera size={15} />
+        Upload a screenshot of the caption
+      </Button>
+
+      <div className="flex items-center gap-2">
+        <div className="h-px flex-1 bg-border dark:bg-white/10" />
+        <span className="text-[10px] text-muted-foreground uppercase tracking-widest">or use a link</span>
+        <div className="h-px flex-1 bg-border dark:bg-white/10" />
       </div>
 
       {/* URL input */}
@@ -559,7 +617,7 @@ function InstagramImportTab() {
           onClick={() => setShowCaption(true)}
           className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors text-center"
         >
-          Or paste the caption text instead →
+          Or paste the caption text (if you can select it) →
         </button>
       )}
 
