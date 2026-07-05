@@ -184,7 +184,7 @@ export default function DashboardPage() {
 
   // Recipe Book mode: the app is just recipes + grocery, so skip the macro dashboard
   useEffect(() => {
-    if (!prefsLoading && simpleMode) router.replace("/recipes/saved");
+    if (!prefsLoading && simpleMode) router.replace("/recipes");
   }, [prefsLoading, simpleMode, router]);
 
   const today = getToday();

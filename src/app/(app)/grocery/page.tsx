@@ -291,7 +291,7 @@ export default function GroceryPage() {
             Add items below or import ingredients from your saved recipes.
           </p>
           <Link
-            href="/recipes/saved"
+            href="/recipes"
             className="text-sm font-semibold px-4 py-2 rounded-full bg-[#00D4AA]/15 text-[#00D4AA] hover:bg-[#00D4AA]/25 transition-colors"
           >
             Browse Recipe Book

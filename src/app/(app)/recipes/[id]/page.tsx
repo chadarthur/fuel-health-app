@@ -1,211 +1,302 @@
-import Image from "next/image";
+"use client";
+
+import { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Clock, Users, ChevronLeft, ShoppingCart } from "lucide-react";
+import {
+  ChevronLeft, Clock, Users, Flame, Dumbbell, ShoppingCart,
+  Trash2, Loader2, Sparkles, CheckCircle
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
-import type { RecipeDetail } from "@/types/recipe";
-import SaveRecipeButton from "./save-recipe-button";
+import { Button } from "@/components/ui/button";
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
+interface Ingredient {
+  name: string;
+  amount: number;
+  unit: string;
+  original?: string;
+}
 
-const MOCK_RECIPES: Record<string, RecipeDetail> = {
-  "1": {
-    id: 1,
-    title: "Teriyaki Salmon Bowl",
-    image: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&q=80",
-    readyInMinutes: 25,
-    servings: 2,
-    nutrition: { calories: 520, protein: 42, carbs: 48, fat: 16, fiber: 4, sugar: 8 },
-    cuisines: ["Japanese"],
-    diets: ["Gluten Free"],
-    instructions:
-      "1. Cook sushi rice. 2. Marinate salmon in teriyaki sauce for 10 min. 3. Pan-sear salmon 4 min per side. 4. Assemble bowls with rice, salmon, edamame, cucumber, and avocado. 5. Drizzle with extra teriyaki sauce and sesame seeds.",
-    ingredients: [
-      { name: "Salmon fillet", amount: 400, unit: "g", original: "400g salmon fillet" },
-      { name: "Sushi rice", amount: 1.5, unit: "cups", original: "1.5 cups sushi rice" },
-      { name: "Teriyaki sauce", amount: 4, unit: "tbsp", original: "4 tbsp teriyaki sauce" },
-      { name: "Edamame", amount: 0.5, unit: "cup", original: "½ cup edamame" },
-      { name: "Cucumber", amount: 1, unit: "medium", original: "1 medium cucumber" },
-      { name: "Avocado", amount: 1, unit: "", original: "1 avocado" },
-      { name: "Sesame seeds", amount: 1, unit: "tbsp", original: "1 tbsp sesame seeds" },
-      { name: "Nori sheets", amount: 2, unit: "", original: "2 nori sheets" },
-    ],
-  },
-};
+interface Nutrition {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber?: number;
+  sugar?: number;
+}
 
-async function getRecipe(id: string): Promise<RecipeDetail | null> {
-  // Try API first
-  try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/api/recipes/${id}`,
-      { next: { revalidate: 3600 } }
-    );
-    if (res.ok) {
-      const data = await res.json();
-      return data.recipe ?? data;
+interface SavedRecipeDetail {
+  id: string;
+  title: string;
+  image?: string;
+  description?: string;
+  readyInMinutes?: number;
+  servings?: number;
+  instructions?: string;
+  ingredients: Ingredient[];
+  nutrition: Nutrition;
+  cuisines: string[];
+  diets: string[];
+  isAiGenerated: boolean;
+  sourceUrl?: string;
+  createdAt: string;
+}
+
+const PLACEHOLDER = "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800&q=80";
+
+export default function SavedRecipeDetailPage() {
+  const params = useParams();
+  const router = useRouter();
+  const id = params.id as string;
+
+  const [recipe, setRecipe] = useState<SavedRecipeDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [groceryLoading, setGroceryLoading] = useState(false);
+  const [groceryAdded, setGroceryAdded] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    const fetchRecipe = async () => {
+      try {
+        const res = await fetch(`/api/recipes/saved/${id}`);
+        if (res.ok) {
+          setRecipe(await res.json());
+        } else {
+          router.replace("/recipes");
+        }
+      } catch {
+        router.replace("/recipes");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchRecipe();
+  }, [id, router]);
+
+  async function handleAddToGrocery() {
+    if (!recipe || groceryAdded) return;
+    setGroceryLoading(true);
+    try {
+      const res = await fetch("/api/grocery/from-recipe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipeId: recipe.id }),
+      });
+      if (res.ok) setGroceryAdded(true);
+    } finally {
+      setGroceryLoading(false);
     }
-  } catch {
-    // fall through to mock
   }
-  return MOCK_RECIPES[id] ?? MOCK_RECIPES["1"];
-}
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+  async function handleDelete() {
+    if (!recipe) return;
+    setDeleting(true);
+    try {
+      await fetch(`/api/recipes/saved/${recipe.id}`, { method: "DELETE" });
+      router.replace("/recipes");
+    } catch {
+      setDeleting(false);
+    }
+  }
 
-interface RecipeDetailPageProps {
-  params: { id: string };
-}
-
-export default async function RecipeDetailPage({ params }: RecipeDetailPageProps) {
-  const recipe = await getRecipe(params.id);
-
-  if (!recipe) {
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-bold mb-2">Recipe not found</h2>
-          <Link href="/recipes" className="text-[#FF6B6B] text-sm">
-            Back to Recipes
-          </Link>
-        </div>
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
+  if (!recipe) return null;
+
   const steps = recipe.instructions
-    ? recipe.instructions.split(/\n|\d+\.\s+/).filter(Boolean)
-    : ["No instructions available."];
+    ? recipe.instructions.split(/\n/).filter((s) => s.trim())
+    : [];
+
+  const macros = [
+    { label: "Calories", value: Math.round(recipe.nutrition.calories), unit: "kcal", color: "#FF9F43" },
+    { label: "Protein", value: Math.round(recipe.nutrition.protein), unit: "g", color: "#54A0FF" },
+    { label: "Carbs", value: Math.round(recipe.nutrition.carbs), unit: "g", color: "#FECA57" },
+    { label: "Fat", value: Math.round(recipe.nutrition.fat), unit: "g", color: "#A29BFE" },
+  ];
 
   return (
-    <div className="min-h-screen bg-background pb-24">
+    <div className="min-h-screen bg-background pb-28">
       {/* Hero image */}
-      <div className="relative w-full h-64 md:h-80">
-        <Image
-          src={recipe.image ?? "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800&q=80"}
+      <div className="relative h-56 sm:h-72 overflow-hidden bg-muted">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={recipe.image || PLACEHOLDER}
           alt={recipe.title}
-          fill
-          className="object-cover"
-          priority
-          sizes="100vw"
+          className="w-full h-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
 
         {/* Back button */}
         <Link
           href="/recipes"
-          className="absolute top-4 left-4 w-9 h-9 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center hover:bg-black/70 transition-colors"
+          className="absolute top-4 left-4 w-9 h-9 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/70 transition-colors"
         >
-          <ChevronLeft size={18} className="text-white" />
+          <ChevronLeft size={18} />
         </Link>
-      </div>
 
-      <div className="px-4 -mt-8 relative z-10 space-y-4">
-        {/* Title + meta */}
-        <div>
-          <h1 className="text-2xl font-black leading-tight mb-2">{recipe.title}</h1>
-          <div className="flex flex-wrap gap-2">
+        {/* Delete button */}
+        <button
+          onClick={handleDelete}
+          disabled={deleting}
+          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white hover:bg-red-500/80 transition-colors"
+        >
+          {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+        </button>
+
+        {/* Title overlay */}
+        <div className="absolute bottom-4 left-4 right-4">
+          {recipe.isAiGenerated && (
+            <div className="inline-flex items-center gap-1 bg-gradient-to-r from-[#FF6B6B] to-[#00D4AA] text-white text-[10px] font-bold px-2 py-1 rounded-full mb-2">
+              <Sparkles size={9} />
+              AI Generated
+            </div>
+          )}
+          <h1 className="text-white text-xl font-bold leading-tight">{recipe.title}</h1>
+          <div className="flex items-center gap-3 mt-1">
             {recipe.readyInMinutes && (
-              <div className="flex items-center gap-1 text-xs text-muted-foreground bg-muted px-2.5 py-1 rounded-full">
-                <Clock size={12} />
+              <div className="flex items-center gap-1 text-white/80 text-xs">
+                <Clock size={11} />
                 {recipe.readyInMinutes} min
               </div>
             )}
             {recipe.servings && (
-              <div className="flex items-center gap-1 text-xs text-muted-foreground bg-muted px-2.5 py-1 rounded-full">
-                <Users size={12} />
+              <div className="flex items-center gap-1 text-white/80 text-xs">
+                <Users size={11} />
                 {recipe.servings} servings
               </div>
             )}
-            {recipe.diets?.map((diet) => (
-              <div
-                key={diet}
-                className="text-xs font-semibold px-2.5 py-1 rounded-full bg-[#00D4AA]/15 text-[#00D4AA]"
-              >
-                {diet}
-              </div>
-            ))}
           </div>
         </div>
+      </div>
 
-        {/* Macro row */}
+      <div className="px-4 pt-4 space-y-4">
+        {/* Macros grid */}
         <div className="grid grid-cols-4 gap-2">
-          {[
-            { label: "Calories", value: recipe.nutrition.calories, unit: "kcal", color: "#FF9F43" },
-            { label: "Protein", value: recipe.nutrition.protein, unit: "g", color: "#54A0FF" },
-            { label: "Carbs", value: recipe.nutrition.carbs, unit: "g", color: "#FECA57" },
-            { label: "Fat", value: recipe.nutrition.fat, unit: "g", color: "#A29BFE" },
-          ].map(({ label, value, unit, color }) => (
-            <div
-              key={label}
-              className="flex flex-col items-center p-3 rounded-2xl"
-              style={{ backgroundColor: `${color}15` }}
-            >
-              <span className="text-lg font-black tabular-nums" style={{ color }}>
-                {value}
-              </span>
-              <span className="text-[9px] text-muted-foreground">{unit}</span>
-              <span className="text-[10px] text-muted-foreground mt-0.5 font-medium">{label}</span>
-            </div>
+          {macros.map(({ label, value, unit, color }) => (
+            <Card key={label} glass>
+              <CardContent className="py-3 px-2 text-center">
+                <p className="text-base font-black" style={{ color }}>{value}</p>
+                <p className="text-[9px] text-muted-foreground">{unit}</p>
+                <p className="text-[9px] font-semibold text-muted-foreground mt-0.5">{label}</p>
+              </CardContent>
+            </Card>
           ))}
         </div>
 
-        {/* Ingredients + Instructions (2-column on desktop) */}
-        <div className="grid md:grid-cols-2 gap-4">
+        {/* Add to Grocery button */}
+        <Button
+          onClick={handleAddToGrocery}
+          disabled={groceryLoading || groceryAdded}
+          className={cn(
+            "w-full gap-2 font-semibold",
+            groceryAdded
+              ? "bg-[#00D4AA]/15 text-[#00D4AA] hover:bg-[#00D4AA]/20 border border-[#00D4AA]/30"
+              : "bg-[#00D4AA] hover:bg-[#00D4AA]/90 text-black"
+          )}
+        >
+          {groceryLoading ? (
+            <Loader2 size={15} className="animate-spin" />
+          ) : groceryAdded ? (
+            <CheckCircle size={15} />
+          ) : (
+            <ShoppingCart size={15} />
+          )}
+          {groceryAdded ? "Added to Grocery List!" : "Add to Grocery List"}
+        </Button>
+
+        {/* Diet / cuisine tags */}
+        {(recipe.diets.length > 0 || recipe.cuisines.length > 0) && (
+          <div className="flex flex-wrap gap-1.5">
+            {[...recipe.cuisines, ...recipe.diets].map((tag) => (
+              <span
+                key={tag}
+                className="text-[10px] font-semibold px-2 py-1 rounded-full bg-muted text-muted-foreground"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Description */}
+        {recipe.description && (
+          <p className="text-sm text-muted-foreground leading-relaxed">{recipe.description}</p>
+        )}
+
+        {/* Ingredients + Instructions */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Ingredients */}
-          <Card glass>
-            <CardContent className="pt-4">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
-                Ingredients
+          {recipe.ingredients.length > 0 && (
+            <section>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-2">
+                <Flame size={12} style={{ color: "#FF9F43" }} />
+                Ingredients ({recipe.ingredients.length})
               </p>
-              <div className="space-y-2.5">
-                {recipe.ingredients.map((ing, i) => (
-                  <div key={i} className="flex items-center gap-3 text-sm">
-                    <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: "#FF6B6B" }} />
-                    <span className="text-[#FF6B6B] font-semibold text-xs w-16 shrink-0">
-                      {ing.amount} {ing.unit}
-                    </span>
-                    <span className="text-foreground/80">{ing.name}</span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+              <Card glass className="overflow-hidden">
+                <CardContent className="py-3 px-4">
+                  <ul className="space-y-2">
+                    {recipe.ingredients.map((ing, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm">
+                        <span className="text-[#FF6B6B] mt-0.5 shrink-0">•</span>
+                        <span>{ing.original || `${ing.amount} ${ing.unit} ${ing.name}`}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            </section>
+          )}
 
           {/* Instructions */}
-          <Card glass>
-            <CardContent className="pt-4">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
+          {steps.length > 0 && (
+            <section>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-2">
+                <Dumbbell size={12} style={{ color: "#54A0FF" }} />
                 Instructions
               </p>
-              <ol className="space-y-3">
-                {steps.map((step, i) => (
-                  <li key={i} className="flex gap-3 text-sm leading-relaxed">
-                    <span
-                      className={cn(
-                        "shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black text-white mt-0.5"
-                      )}
-                      style={{ background: "linear-gradient(135deg, #FF6B6B, #00D4AA)" }}
-                    >
-                      {i + 1}
-                    </span>
-                    <span className="text-foreground/80">{step}</span>
-                  </li>
-                ))}
-              </ol>
-            </CardContent>
-          </Card>
+              <Card glass className="overflow-hidden">
+                <CardContent className="py-3 px-4">
+                  <ol className="space-y-3">
+                    {steps.map((step, i) => (
+                      <li key={i} className="flex gap-3 text-sm">
+                        <span
+                          className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black text-white mt-0.5"
+                          style={{ background: "linear-gradient(135deg, #FF6B6B, #00D4AA)" }}
+                        >
+                          {i + 1}
+                        </span>
+                        <span className="leading-relaxed">{step.replace(/^\d+\.\s*/, "")}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </CardContent>
+              </Card>
+            </section>
+          )}
         </div>
 
-        {/* Action buttons */}
-        <div className="grid grid-cols-2 gap-3 pt-2">
-          <SaveRecipeButton recipe={recipe} />
-          <Link href="/grocery">
-            <button className="w-full h-11 rounded-2xl border border-border dark:border-white/10 text-sm font-semibold flex items-center justify-center gap-2 hover:bg-accent transition-colors">
-              <ShoppingCart size={15} />
-              Add to Grocery
-            </button>
-          </Link>
-        </div>
+        {/* Source URL */}
+        {recipe.sourceUrl && (
+          <p className="text-xs text-muted-foreground text-center">
+            Source:{" "}
+            <a
+              href={recipe.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[#54A0FF] hover:underline"
+            >
+              {new URL(recipe.sourceUrl).hostname}
+            </a>
+          </p>
+        )}
       </div>
     </div>
   );
